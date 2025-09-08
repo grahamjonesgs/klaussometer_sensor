@@ -1,4 +1,4 @@
-# ESP32_ext_DHT11_Sleep_SSL
+#Klaussometer_sensor
 
 Ardunino IDE code for ESP32 with DHT type sensor. Logs temperature and humidity values to mqtt (can be to GBridge to enable reading on Google Home)
 
