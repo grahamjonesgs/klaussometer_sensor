@@ -233,18 +233,3 @@ void deep_sleep(int sleepSeconds) {
     esp_deep_sleep_start();
 }
 
-// Function to get board configuration based on MAC address
-BoardConfig getBoardConfig(String mac) {
-    // Find the matching configuration
-    for (const auto& config : boardConfigs) {
-        if (mac.equals(config.macAddress)) {
-            Serial.println("Found matching config for MAC: " + mac);
-            return config;
-        }
-    }
-
-    // Return a default configuration if no match is found
-    Serial.println("No matching config found. Using default.");
-    return {"00:00:00:00:00:00", // Default MAC
-            "default",           false, 4, DHT22, 0, 0, 600};
-}
