@@ -1,4 +1,5 @@
 // Core Arduino and WiFi libraries
+#include "ESP32_config.h"
 #include <Arduino.h>
 #include <DHT.h>
 #include <PubSubClient.h>
@@ -6,13 +7,10 @@
 #include <WiFiClient.h>
 #include <time.h>
 
-// Custom configuration and lookup table
-#include "ESP32_config.h"
-
 // Constants
 #define uS_TO_S_FACTOR 1000000ULL  // Conversion factor for microseconds to seconds
 #define WIFI_RETRIES 5             // Number of times to retry WiFi before a restart
-#define MQTT_RETRIES 2             // Number of times to retry MQTT before a restart
+#define MQTT_RETRIES 5             // Number of times to retry MQTT before a restart
 #define DHT_RETRIES 5              // Number of times to retry DHT reads before giving up
 #define VOLT_READS 10              // Number of times to read the voltage for averaging
 #define RAW_VOLTS_CONVERSION 620.5 // Mapping raw input back to voltage
@@ -31,8 +29,9 @@ String debug_topic;
 String battery_topic;
 WiFiClient espClient;
 PubSubClient client(espClient);
-DHT dht(0, 0); // Will be re-initialized with correct values in loadBoardConfig()
+DHT dht(0, 0);                   // Will be re-initialized with correct values in loadBoardConfig()
 long lastReadingTime = LONG_MIN; // Initialize to a large negative value
+
 
 // Definitions for NTP time
 const char* ntpServer = "pool.ntp.org";
@@ -71,6 +70,7 @@ void loop() {
         }
     }
 
+
     if (!setup_wifi()) {
         if (boardConfig.isBatteryPowered) {
             deep_sleep(boardConfig.timeToSleep);
@@ -90,9 +90,9 @@ void loop() {
     // Get current time from NTP
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     if (!getLocalTime(&timeinfo)) {
-        strcpy(timeStringBuff, "Time Error");
+        strncpy(timeStringBuff, "Time Error", sizeof(timeStringBuff) - 1);
     } else {
-        strftime(timeStringBuff, sizeof(timeStringBuff), "%d/%m/%y %H:%M:%S", &timeinfo);
+        strftime(timeStringBuff, sizeof(timeStringBuff) - 1, "%d/%m/%y %H:%M:%S", &timeinfo);
     }
 
     // Read DHT sensor data with retries
@@ -201,6 +201,9 @@ void MQTT_reconnect() {
             if (boardConfig.isBatteryPowered) {
                 deep_sleep(boardConfig.timeToSleep);
             }
+            else {
+                ESP.restart();
+            }
         }
         debug_message("Connecting to MQTT broker...", false);
         if (client.connect("ESP32Client", MQTT_USER, MQTT_PASSWORD)) {
@@ -232,4 +235,3 @@ void deep_sleep(int sleepSeconds) {
     delay(1000);
     esp_deep_sleep_start();
 }
-

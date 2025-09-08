@@ -50,7 +50,7 @@ const BoardConfig boardConfigs[] = {
     0,
     60
   },
-  // Example for a battery-powered TTGO board in the 'garden'
+  // Example for a battery-powered TTGO board
   {
     "11:11:11:11:11:11",
     "garden",
