@@ -10,9 +10,9 @@
             "includePath": [
                 "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/src",
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
+                "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/ArduinoMqttClient/src",
                 "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/DHT sensor library",
                 "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/Adafruit Unified Sensor",
-                "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/PubSubClient/src",
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/newlib/platform_include",
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include",
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include/esp_additions/freertos",
@@ -242,9 +242,9 @@
                 "path": [
                     "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/src",
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
+                    "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/ArduinoMqttClient/src",
                     "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/DHT sensor library",
                     "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/Adafruit Unified Sensor",
-                    "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/PubSubClient/src",
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/newlib/platform_include",
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include",
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include/esp_additions/freertos",
