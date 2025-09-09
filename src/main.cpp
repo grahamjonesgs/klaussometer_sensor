@@ -2,7 +2,7 @@
 #include "ESP32_config.h"
 #include <Arduino.h>
 #include <DHT.h>
-#include <PubSubClient.h>
+#include <ArduinoMqttClient.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <time.h>
@@ -28,10 +28,9 @@ String humidity_topic;
 String debug_topic;
 String battery_topic;
 WiFiClient espClient;
-PubSubClient client(espClient);
+MqttClient mqttClient(espClient);
 DHT dht(0, 0);                   // Will be re-initialized with correct values in loadBoardConfig()
 long lastReadingTime = LONG_MIN; // Initialize to a large negative value
-
 
 // Definitions for NTP time
 const char* ntpServer = "pool.ntp.org";
@@ -59,17 +58,16 @@ void setup() {
     loadBoardConfig();
     // Initialize DHT sensor
     dht.begin();
-    client.setServer(MQTT_SERVER, 1883);
+    mqttClient.setUsernamePassword(MQTT_USER, MQTT_PASSWORD);
 }
 
 void loop() {
     // For mains-powered devices, wait until the next reading time.
     if (!boardConfig.isBatteryPowered) {
         while (millis() - lastReadingTime < (boardConfig.timeToSleep * 1000)) {
-            delay(100); // Prevents a tight loop, reducing CPU usage.
+            delay(1000); // Prevents a tight loop, reducing CPU usage.
         }
     }
-
 
     if (!setup_wifi()) {
         if (boardConfig.isBatteryPowered) {
@@ -83,7 +81,7 @@ void loop() {
     }
 
     // Reconnect MQTT if needed
-    if (!client.connected()) {
+    if (!mqttClient.connected()) {
         MQTT_reconnect();
     }
 
@@ -113,7 +111,6 @@ void loop() {
         if (boardConfig.isBatteryPowered) {
             deep_sleep(boardConfig.timeToSleep);
         } else {
-            Serial.println("DHT read failed, waiting for next cycle...");
             lastReadingTime = millis();
             return;
         }
@@ -132,15 +129,21 @@ void loop() {
         float halfVoltageValue = totalHalfVoltageValue / VOLT_READS;
         float volts = halfVoltageValue / RAW_VOLTS_CONVERSION;
         batteryMessage = " | Bat: " + String(volts, 2) + "V/" + String(initialVolts, 2) + "V";
-        client.publish(battery_topic.c_str(), String(volts, 2).c_str(), false);
+        mqttClient.beginMessage(battery_topic.c_str());
+        mqttClient.printf(String(volts, 2).c_str());
+        mqttClient.endMessage();
     }
 
     String mqttMessage =
         String(timeStringBuff) + " | T: " + String(t, 1) + " | H: " + String(h, 0) + batteryMessage + " | Boot: " + String(bootCount) + " | Success: " + String(successCount);
     debug_message(mqttMessage, true);
-    client.publish(temperature_topic.c_str(), String(t).c_str(), false);
+    mqttClient.beginMessage(temperature_topic.c_str());
+    mqttClient.printf(String(t).c_str());
+    mqttClient.endMessage();
     delay(100);
-    client.publish(humidity_topic.c_str(), String(h).c_str(), false);
+    mqttClient.beginMessage(humidity_topic.c_str());
+    mqttClient.printf(String(h).c_str());
+    mqttClient.endMessage();
 
     delay(1000); // Wait for messages to be sent
 
@@ -187,29 +190,30 @@ bool setup_wifi() {
         delay(3000);
         counter++;
     }
-    debug_message("WiFi is OK => ESP32 IP address is: " + WiFi.localIP().toString(), false);
+    if (WiFi.status() != WL_CONNECTED) {
+        debug_message("WiFi is OK => ESP32 IP address is: " + WiFi.localIP().toString(), false);
+    }
     return true;
 }
 
 // Reconnect to MQTT broker
 void MQTT_reconnect() {
     int counter = 1;
-    while (!client.connected()) {
+    while (!mqttClient.connected()) {
         if (counter > MQTT_RETRIES) {
             debug_message("[Error] MQTT connection failed after " + String(MQTT_RETRIES) + " retries.", false);
             // This is a major error; on battery, we deep sleep. For mains, we continue the loop.
             if (boardConfig.isBatteryPowered) {
                 deep_sleep(boardConfig.timeToSleep);
-            }
-            else {
+            } else {
                 ESP.restart();
             }
         }
         debug_message("Connecting to MQTT broker...", false);
-        if (client.connect("ESP32Client", MQTT_USER, MQTT_PASSWORD)) {
+        if (mqttClient.connect(MQTT_SERVER, 1883)) {
             debug_message("MQTT link OK", false);
         } else {
-            debug_message("[Error] MQTT not connected: " + String(client.state()), false);
+            debug_message("[Error] MQTT not connected: ", false);
             delay(3000);
         }
         counter++;
@@ -217,9 +221,13 @@ void MQTT_reconnect() {
 }
 
 // Send debug message to MQTT and/or Serial
-void debug_message(String message, bool perm) {
+void debug_message(String message, bool retain) {
     if (DEBUG_MQTT) {
-        client.publish(debug_topic.c_str(), message.c_str(), perm);
+        delay(100);
+        mqttClient.beginMessage(debug_topic.c_str(), retain);
+        mqttClient.printf(message.c_str());
+        mqttClient.endMessage();
+
         delay(100);
     }
     if (DEBUG_SERIAL) {
