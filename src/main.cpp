@@ -1,8 +1,12 @@
 // Core Arduino and WiFi libraries
-#include "ESP32_config.h"
+#include "config.h"
+#include "html.h"
 #include <Arduino.h>
-#include <DHT.h>
 #include <ArduinoMqttClient.h>
+#include <DHT.h>
+#include <HTTPClient.h>
+#include <Update.h>
+#include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <time.h>
@@ -31,6 +35,11 @@ WiFiClient espClient;
 MqttClient mqttClient(espClient);
 DHT dht(0, 0);                   // Will be re-initialized with correct values in loadBoardConfig()
 long lastReadingTime = LONG_MIN; // Initialize to a large negative value
+WebServer webServer(80);
+float lastTemp = 0.0;
+float lastHumid = 0.0;
+float lastVolts = 0.0;
+String lastReadingTimeStr = "N/A";
 
 // Definitions for NTP time
 const char* ntpServer = "pool.ntp.org";
@@ -46,6 +55,9 @@ void MQTT_reconnect();
 bool setup_wifi();
 void loadBoardConfig();
 BoardConfig getBoardConfig(String mac);
+void setup_OTA();
+void updateFirmware();
+void checkForUpdates();
 
 void setup() {
     bootCount++;
@@ -53,7 +65,6 @@ void setup() {
     while (!Serial) {
         ; // Wait for serial port to connect.
     }
-    Serial.printf("\nESP32 Sensor Starting...\n");
     // Load configuration based on MAC address
     loadBoardConfig();
     // Initialize DHT sensor
@@ -65,7 +76,8 @@ void loop() {
     // For mains-powered devices, wait until the next reading time.
     if (!boardConfig.isBatteryPowered) {
         while (millis() - lastReadingTime < (boardConfig.timeToSleep * 1000)) {
-            delay(1000); // Prevents a tight loop, reducing CPU usage.
+            // delay(100); // Prevents a tight loop, reducing CPU usage.
+            webServer.handleClient(); // Handle OTA updates
         }
     }
 
@@ -74,11 +86,13 @@ void loop() {
             deep_sleep(boardConfig.timeToSleep);
         } else {
             // For mains-powered, just log an error and wait for the next cycle.
-            Serial.println("Failed to connect to WiFi, waiting for next cycle...");
+            debug_message("Failed to connect to WiFi, waiting for next cycle...", false);
             lastReadingTime = millis();
             return;
         }
     }
+
+    checkForUpdates();
 
     // Reconnect MQTT if needed
     if (!mqttClient.connected()) {
@@ -117,6 +131,10 @@ void loop() {
     }
 
     successCount++;
+    // Store the last successful readings
+    lastTemp = t;
+    lastHumid = h;
+    lastReadingTimeStr = String(timeStringBuff);
 
     // Publish sensor data to MQTT
     String batteryMessage = "";
@@ -128,6 +146,7 @@ void loop() {
         }
         float halfVoltageValue = totalHalfVoltageValue / VOLT_READS;
         float volts = halfVoltageValue / RAW_VOLTS_CONVERSION;
+        lastVolts = volts;
         batteryMessage = " | Bat: " + String(volts, 2) + "V/" + String(initialVolts, 2) + "V";
         mqttClient.beginMessage(battery_topic.c_str());
         mqttClient.printf(String(volts, 2).c_str());
@@ -159,8 +178,7 @@ void loop() {
 // Load board configuration based on MAC address
 void loadBoardConfig() {
     macAddress = WiFi.macAddress();
-    Serial.print("Board MAC Address: ");
-    Serial.println(macAddress);
+    debug_message("Board MAC Address: " + macAddress, false);
     boardConfig = getBoardConfig(macAddress);
 
     // Set up topics based on the retrieved configuration
@@ -189,10 +207,12 @@ bool setup_wifi() {
         debug_message("Connecting to " + String(WIFI_SSID) + "...", false);
         delay(3000);
         counter++;
+        if (WiFi.status() == WL_CONNECTED) {
+            debug_message("WiFi is OK => IP address is: " + WiFi.localIP().toString(), false);
+            setup_OTA();
+        }
     }
-    if (WiFi.status() != WL_CONNECTED) {
-        debug_message("WiFi is OK => ESP32 IP address is: " + WiFi.localIP().toString(), false);
-    }
+
     return true;
 }
 
@@ -224,6 +244,8 @@ void MQTT_reconnect() {
 void debug_message(String message, bool retain) {
     if (DEBUG_MQTT) {
         delay(100);
+        // add firmware version to beginning of message and send to debug topic
+        message = String(FIRMWARE_VERSION) + " | " + message;
         mqttClient.beginMessage(debug_topic.c_str(), retain);
         mqttClient.printf(message.c_str());
         mqttClient.endMessage();
@@ -238,8 +260,134 @@ void debug_message(String message, bool retain) {
 // Enter deep sleep for a specified number of seconds
 void deep_sleep(int sleepSeconds) {
     esp_sleep_enable_timer_wakeup(sleepSeconds * uS_TO_S_FACTOR);
-    debug_message("Setup ESP32 to sleep for " + String(sleepSeconds) + " Seconds", false);
+    debug_message("Sleep for " + String(sleepSeconds) + " Seconds", false);
     WiFi.disconnect();
     delay(1000);
     esp_deep_sleep_start();
+}
+
+void setup_OTA() {
+    webServer.on("/", HTTP_GET, []() {
+        String content = "<p class='section-title'>Board Details</p>"
+                         "<p><b>Firmware Version:</b> " +
+                         String(FIRMWARE_VERSION) +
+                         "</p>"
+                         "<p><b>MAC Address:</b> " +
+                         macAddress +
+                         "</p>"
+                         "<p><b>Room:</b> " +
+                         String(boardConfig.roomName) + "</p>";
+
+        content += "<p class='section-title'>Last Reading</p>"
+                   "<p><b>Time:</b> " +
+                   lastReadingTimeStr +
+                   "</p>"
+                   "<p><b>Temperature:</b> " +
+                   String(lastTemp, 1) +
+                   " &deg;C</p>"
+                   "<p><b>Humidity:</b> " +
+                   String(lastHumid, 0) + " %</p>";
+
+        // Conditionally add battery information
+        if (boardConfig.isBatteryPowered) {
+            content += "<p><b>Battery Voltage:</b> " + String(lastVolts, 2) + " V</p>";
+        }
+
+        String html = info_html;
+        html.replace("{{content}}", content);
+        webServer.send(200, "text/html", html);
+    });
+
+    webServer.on("/update", HTTP_GET, []() {
+        String htmlPage = ota_html;
+        htmlPage.replace("{{FIRMWARE_VERSION}}", FIRMWARE_VERSION);
+        webServer.send(200, "text/html", htmlPage);
+    });
+
+    webServer.on(
+        "/update", HTTP_POST,
+        []() {
+            webServer.sendHeader("Connection", "close");
+            webServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+            delay(1000);
+            ESP.restart();
+        },
+        []() {
+            HTTPUpload& upload = webServer.upload();
+            if (upload.status == UPLOAD_FILE_START) {
+                if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { // Start with unknown size
+                    Update.printError(Serial);
+                }
+            } else if (upload.status == UPLOAD_FILE_WRITE) {
+                if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+                    Update.printError(Serial);
+                }
+            } else if (upload.status == UPLOAD_FILE_END) {
+                if (Update.end(true)) {
+                    debug_message("Update Success, rebooting...\n", true);
+                    delay(1000);
+                } else {
+                    Update.printError(Serial);
+                }
+            }
+        });
+
+    webServer.begin();
+}
+
+void checkForUpdates() {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        // Check version
+        String url = "http://" + String(host) + ":" + String(port) + String(version_path);
+        http.begin(url.c_str());
+        int httpCode = http.GET();
+        if (httpCode == HTTP_CODE_OK) {
+            String serverVersion = http.getString();
+            serverVersion.trim();
+            if (serverVersion.compareTo(FIRMWARE_VERSION) > 0) {
+                String message = "New firmware version available: " + serverVersion + " (current: " + String(FIRMWARE_VERSION) + ")";
+                debug_message(message, true);
+                // Start the update
+                updateFirmware();
+            } else {
+            }
+        } else {
+            debug_message("Error fetching version file.", true);
+        }
+        http.end();
+    } else {
+        debug_message("WiFi not connected. Cannot check for updates.", false);
+    }
+}
+void updateFirmware() {
+    HTTPClient http;
+    String binUrl = "http://" + String(host) + ":" + String(port) + String(bin_path);
+    http.begin(binUrl.c_str());
+    int httpCode = http.GET();
+    if (httpCode == HTTP_CODE_OK) {
+        int contentLength = http.getSize();
+        bool canBegin = Update.begin(contentLength);
+        if (canBegin) {
+            debug_message("Beginning OTA update. This may take a few moments...", true);
+            WiFiClient& client = http.getStream();
+            size_t written = Update.writeStream(client);
+            if (written == contentLength) {
+                debug_message("OTA update written successfully.", true);
+            } else {
+                debug_message("OTA update failed to write completely.", true);
+            }
+            if (Update.end()) {
+                debug_message("Update finished successfully. Restarting...", true);
+                ESP.restart();
+            } else {
+                debug_message("Update failed. Error: " + String(Update.errorString()), true);
+            }
+        } else {
+            debug_message("Not enough space to start OTA update.", true);
+        }
+    } else {
+        debug_message("HTTP GET failed, error: " + String(http.errorToString(httpCode).c_str()), true);
+    }
+    http.end();
 }
