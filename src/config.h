@@ -26,7 +26,7 @@ const char* bin_path = "/sensor/firmware.bin";
 const char* version_path = "/sensor/version.txt";
 
 // Define the current firmware version
-#define FIRMWARE_VERSION "1.0.5"
+#define FIRMWARE_VERSION "1.0.7"
 
 // Global debug flags (can be overridden per board)
 const bool DEBUG_SERIAL = true;
