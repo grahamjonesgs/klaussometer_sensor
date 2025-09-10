@@ -245,7 +245,7 @@ void debug_message(String message, bool retain) {
     if (DEBUG_MQTT) {
         delay(100);
         // add firmware version to beginning of message and send to debug topic
-        message = String(FIRMWARE_VERSION) + " | " + message;
+        message = "V" + String(FIRMWARE_VERSION) + " | " + message;
         mqttClient.beginMessage(debug_topic.c_str(), retain);
         mqttClient.printf(message.c_str());
         mqttClient.endMessage();
@@ -350,7 +350,6 @@ void checkForUpdates() {
                 debug_message(message, true);
                 // Start the update
                 updateFirmware();
-            } else {
             }
         } else {
             debug_message("Error fetching version file.", true);
