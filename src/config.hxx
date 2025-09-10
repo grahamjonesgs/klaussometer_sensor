@@ -19,6 +19,15 @@
 #define MQTT_DEBUG_TOPIC "/debug"
 #define MQTT_BATTERY_TOPIC "/battery/set"
 
+//OTA Update server details
+const char* host = "YOUR_SERVER_IP_OR_DOMAIN";
+const int port = 80;
+const char* bin_path = "/firmware.bin";
+const char* version_path = "/version.txt";
+
+// Define the current firmware version
+#define FIRMWARE_VERSION "1.0.0"
+
 // Global debug flags (can be overridden per board)
 #define DEBUG_SERIAL true
 #define DEBUG_MQTT true
