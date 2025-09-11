@@ -26,7 +26,7 @@ const char* OTA_BIN_PATH = "/sensor/firmware.bin";
 const char* OTA_VERSION_PATH = "/sensor/version.txt";
 
 // Define the current firmware version
-#define FIRMWARE_VERSION "1.0.8"
+#define FIRMWARE_VERSION "1.0.9"
 
 // Global debug flags (can be overridden per board)
 const bool DEBUG_SERIAL = true;
