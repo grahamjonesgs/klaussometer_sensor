@@ -20,10 +20,10 @@
 #define MQTT_BATTERY_TOPIC "/battery/set"
 
 //OTA Update server details
-const char* host = "YOUR_SERVER_IP_OR_DOMAIN";
-const int port = 80;
-const char* bin_path = "/firmware.bin";
-const char* version_path = "/version.txt";
+const char* OTA_HOST = "YOUR_SERVER_IP_OR_DOMAIN";
+const int OTA_PORT = 80;
+const char* OTA_BIN_PATH = "/firmware.bin";
+const char* OTA_VERSION_PATH = "/version.txt";
 
 // Define the current firmware version
 #define FIRMWARE_VERSION "1.0.0"
