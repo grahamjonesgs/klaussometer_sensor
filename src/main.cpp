@@ -55,7 +55,7 @@ void MQTT_reconnect();
 bool setup_wifi();
 void loadBoardConfig();
 BoardConfig getBoardConfig(String mac);
-void setup_OTA();
+void setup_OTA_web();
 void updateFirmware();
 void checkForUpdates();
 
@@ -209,7 +209,7 @@ bool setup_wifi() {
         counter++;
         if (WiFi.status() == WL_CONNECTED) {
             debug_message("WiFi is OK => IP address is: " + WiFi.localIP().toString(), false);
-            setup_OTA();
+            setup_OTA_web();
         }
     }
 
@@ -266,7 +266,7 @@ void deep_sleep(int sleepSeconds) {
     esp_deep_sleep_start();
 }
 
-void setup_OTA() {
+void setup_OTA_web() {
     webServer.on("/", HTTP_GET, []() {
         String content = "<p class='section-title'>Board Details</p>"
                          "<p><b>Firmware Version:</b> " +
@@ -339,7 +339,7 @@ void checkForUpdates() {
     if (WiFi.status() == WL_CONNECTED) {
         HTTPClient http;
         // Check version
-        String url = "http://" + String(host) + ":" + String(port) + String(version_path);
+        String url = "https://" + String(OTA_HOST) + ":" + String("443") + String(OTA_VERSION_PATH);
         http.begin(url.c_str());
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK) {
@@ -359,9 +359,10 @@ void checkForUpdates() {
         debug_message("WiFi not connected. Cannot check for updates.", false);
     }
 }
+
 void updateFirmware() {
     HTTPClient http;
-    String binUrl = "http://" + String(host) + ":" + String(port) + String(bin_path);
+    String binUrl = "https://" + String(OTA_HOST) + ":" + String("443") + String(OTA_BIN_PATH);
     http.begin(binUrl.c_str());
     int httpCode = http.GET();
     if (httpCode == HTTP_CODE_OK) {

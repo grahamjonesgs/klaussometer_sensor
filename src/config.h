@@ -20,13 +20,13 @@ const char* MQTT_DEBUG_TOPIC = "/debug";
 const char* MQTT_BATTERY_TOPIC = "/battery/set";
 
 //OTA Update server details
-const char* host = "watsonia22.com";
-const int port = 80;
-const char* bin_path = "/sensor/firmware.bin";
-const char* version_path = "/sensor/version.txt";
+const char* OTA_HOST = "watsonia22.com";
+const int OTA_PORT = 80;
+const char* OTA_BIN_PATH = "/sensor/firmware.bin";
+const char* OTA_VERSION_PATH = "/sensor/version.txt";
 
 // Define the current firmware version
-#define FIRMWARE_VERSION "1.0.7"
+#define FIRMWARE_VERSION "1.0.8"
 
 // Global debug flags (can be overridden per board)
 const bool DEBUG_SERIAL = true;
