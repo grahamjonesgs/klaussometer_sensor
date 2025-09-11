@@ -58,6 +58,7 @@ BoardConfig getBoardConfig(String mac);
 void setup_OTA_web();
 void updateFirmware();
 void checkForUpdates();
+String getUptime();
 
 void setup() {
     bootCount++;
@@ -276,7 +277,11 @@ void setup_OTA_web() {
                          macAddress +
                          "</p>"
                          "<p><b>Room:</b> " +
-                         String(boardConfig.roomName) + "</p>";
+                         String(boardConfig.roomName) + 
+                         "</p>"
+                         "<p><b>Uptime:</b> " +
+                         getUptime() +
+                         "</p>";
 
         content += "<p class='section-title'>Last Reading</p>"
                    "<p><b>Time:</b> " +
@@ -390,4 +395,27 @@ void updateFirmware() {
         debug_message("HTTP GET failed, error: " + String(http.errorToString(httpCode).c_str()), true);
     }
     http.end();
+}
+
+String getUptime() {
+  unsigned long uptime_ms = millis();
+  unsigned long seconds = uptime_ms / 1000;
+
+  unsigned long days = seconds / (24 * 3600);
+  unsigned long hours = (seconds % (24 * 3600)) / 3600;
+  unsigned long minutes = (seconds % 3600) / 60;
+  unsigned long remaining_seconds = seconds % 60;
+
+  // Create the formatted string
+  String uptime_str = "";
+  uptime_str += days;
+  uptime_str += " days, ";
+  uptime_str += hours;
+  uptime_str += " hours, ";
+  uptime_str += minutes;
+  uptime_str += " minutes, ";
+  uptime_str += remaining_seconds;
+  uptime_str += " seconds";
+
+  return uptime_str;
 }
