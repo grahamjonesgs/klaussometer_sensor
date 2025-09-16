@@ -1,4 +1,4 @@
-// Upate with WiFI and MQTT definitions, save as .h file
+// Update with WiFI and MQTT definitions, save as .h file
 #ifndef ESP32_CONFIG_H
 #define ESP32_CONFIG_H
 
@@ -26,7 +26,7 @@ const char* OTA_BIN_PATH = "/sensor/firmware.bin";
 const char* OTA_VERSION_PATH = "/sensor/version.txt";
 
 // Define the current firmware version
-#define FIRMWARE_VERSION "1.0.9"
+#define FIRMWARE_VERSION "1.1.1"
 
 // Global debug flags (can be overridden per board)
 const bool DEBUG_SERIAL = true;
@@ -66,7 +66,7 @@ const BoardConfig boardConfigs[] = {
         30       // Time to sleep in seconds
     },
     {
-        "xxx",        // Mac address of the board
+        "24:6F:28:A1:96:E4",        // Mac address of the board
         "livingroom", // Room name
         false,        // Battery powered
         23,           // DHT pin
@@ -76,7 +76,7 @@ const BoardConfig boardConfigs[] = {
         30            // Time to sleep in seconds
     },
     {
-        "xxx",     // Mac address of the board
+        "24:6F:28:9D:A8:F0",     // Mac address of the board
         "guest", // Room name
         false,     // Battery powered
         23,        // DHT pin
@@ -86,7 +86,7 @@ const BoardConfig boardConfigs[] = {
         30         // Time to sleep in seconds
     },
     {
-        "xxxxx",   // Mac address of the board
+        "24:0A:C4:25:91:08",   // Mac address of the board
         "outside", // Room name
         true,      // Battery powered
         23,        // DHT pin
@@ -98,11 +98,11 @@ const BoardConfig boardConfigs[] = {
 };
 
 // Function to get board configuration based on MAC address
-BoardConfig getBoardConfig(String mac) {
+BoardConfig getBoardConfig(char * mac) {
     // Find the matching configuration
     for (const auto& config : boardConfigs) {
-        if (mac.equals(config.macAddress)) {
-            Serial.println("Found matching config for MAC: " + mac + " for room: " + String(config.roomName));
+        if (strcmp(mac, config.macAddress) == 0) {
+            Serial.println("Found matching config for MAC: " + String(mac) + " for room: " + String(config.roomName));
             return config;
         }
     }
