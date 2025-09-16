@@ -22,7 +22,12 @@
 // RTC Memory variables (persist during deep sleep)
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR int successCount = 0;
-RTC_DATA_ATTR float initialVolts = 0.0;
+
+struct SensorData {
+    float temperature;
+    float humidity;
+    bool success;
+};
 
 // Global variables
 BoardConfig boardConfig;
@@ -61,6 +66,9 @@ void setup_OTA_web();
 void updateFirmware();
 void checkForUpdates();
 String getUptime();
+SensorData read_dht_sensor();
+float read_battery_voltage();
+void mqttSendFloat(const char* topic, float value);
 
 void setup() {
     bootCount++;
@@ -79,7 +87,6 @@ void loop() {
     // For mains-powered devices, wait until the next reading time.
     if (!boardConfig.isBatteryPowered) {
         while (millis() - lastReadingTime < (boardConfig.timeToSleep * 1000)) {
-            // delay(100); // Prevents a tight loop, reducing CPU usage.
             webServer.handleClient(); // Handle OTA updates
         }
     }
@@ -88,7 +95,6 @@ void loop() {
         if (boardConfig.isBatteryPowered) {
             deep_sleep(boardConfig.timeToSleep);
         } else {
-            // For mains-powered, just log an error and wait for the next cycle.
             debug_message("Failed to connect to WiFi, waiting for next cycle...", false);
             lastReadingTime = millis();
             return;
@@ -96,8 +102,6 @@ void loop() {
     }
 
     checkForUpdates();
-
-    // Reconnect MQTT if needed
     if (!mqttClient.connected()) {
         MQTT_reconnect();
     }
@@ -111,19 +115,9 @@ void loop() {
     }
 
     // Read DHT sensor data with retries
-    float temperature, humidity;
-    bool dhtReadSuccess = false;
-    for (int i = 0; i < DHT_RETRIES; i++) {
-        temperature = dht.readTemperature();
-        humidity = dht.readHumidity();
-        if (!isnan(temperature) && !isnan(humidity)) {
-            dhtReadSuccess = true;
-            break; // Success, exit the retry loop
-        }
-        delay(200); // Small delay between retries
-    }
+    SensorData reading = read_dht_sensor();
 
-    if (!dhtReadSuccess) {
+    if (!reading.success) {
         snprintf(debugMessage, sizeof(debugMessage), "%s DHT read failed after %d retries.", timeBuffer, DHT_RETRIES);
         debug_message(debugMessage, true);
         if (boardConfig.isBatteryPowered) {
@@ -135,45 +129,30 @@ void loop() {
     }
 
     successCount++;
-    // Store the last successful readings
-    lastTemp = temperature;
-    lastHumid = humidity;
+    // Store the last successful readings and reading time
+    lastTemp = reading.temperature;
+    lastHumid = reading.humidity;
     strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
     lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
 
-    // Publish sensor data to MQTT
+    lastVolts = 0.0; // Initialize lastVolts
+    batteryMessage[0] = '\0'; // Clear the battery message buffer
 
     if (boardConfig.isBatteryPowered && boardConfig.battPin > 0) {
-        float totalHalfVoltageValue = 0.0;
-        for (int i = 0; i < VOLT_READS; i++) {
-            totalHalfVoltageValue += analogRead(boardConfig.battPin);
-            delay(50);
-        }
-        float halfVoltageValue = totalHalfVoltageValue / VOLT_READS;
-        float volts = halfVoltageValue / RAW_VOLTS_CONVERSION;
-        lastVolts = volts;
-        snprintf(debugMessage, sizeof(debugMessage), "%s Battery Voltage: %.2f V", timeBuffer, volts);
-        snprintf(batteryMessage, sizeof(batteryMessage), " | Bat: %.2fV/%.2fV", volts, initialVolts);
-        mqttClient.beginMessage(battery_topic);
-        mqttClient.printf("%.2f", volts);
-        mqttClient.endMessage();
+        lastVolts = read_battery_voltage();
+        snprintf(batteryMessage, sizeof(batteryMessage), " | Bat: %.2fV", lastVolts);
+        mqttSendFloat(battery_topic, lastVolts);
     }
 
     char mqttMessage[256];
-    snprintf(mqttMessage, sizeof(mqttMessage), "%s | T: %.1f | H: %.0f%s | Boot: %d | Success: %d", timeBuffer, temperature, humidity, batteryMessage, bootCount, successCount);
+    snprintf(mqttMessage, sizeof(mqttMessage), "%s | T: %.1f | H: %.0f%s | Boot: %d | Success: %d", timeBuffer, reading.temperature, reading.humidity, batteryMessage, bootCount, successCount);
     debug_message(mqttMessage, true);
-    mqttClient.beginMessage(temperature_topic);
-    mqttClient.printf("%.2f", temperature);
-    mqttClient.endMessage();
-    delay(100);
-    mqttClient.beginMessage(humidity_topic);
-    mqttClient.printf("%.2f", humidity);
-    mqttClient.endMessage();
-
-    delay(1000); // Wait for messages to be sent
+    mqttSendFloat(temperature_topic, reading.temperature);
+    mqttSendFloat(humidity_topic, reading.humidity);
 
     // Conditional deep sleep or time-based wait
     if (boardConfig.isBatteryPowered) {
+         delay(1000); // Wait for messages to be sent
         WiFi.disconnect();
         deep_sleep(boardConfig.timeToSleep);
     } else {
@@ -255,6 +234,12 @@ void MQTT_reconnect() {
     }
 }
 
+void mqttSendFloat(const char* topic, float value) {
+    mqttClient.beginMessage(topic);
+    mqttClient.printf("%.2f", value);
+    mqttClient.endMessage();
+}
+
 // Send debug message to MQTT and/or Serial
 void debug_message(const char* message, bool retain) {
     char fullMessageBuffer[256];
@@ -295,7 +280,8 @@ void setup_OTA_web() {
                   macAddress +
                   "</p>"
                   "<p><b>Room:</b> " +
-                  String(boardConfig.roomName) + "</p>"
+                  String(boardConfig.roomName) +
+                  "</p>"
                   "<p><b>Uptime:</b> <span id=\"uptime\">N/A</span></p>";
 
         if (strncmp(lastReadingTimeStr, "N/A", 3) != 0) {
@@ -304,7 +290,7 @@ void setup_OTA_web() {
                        "<p><b>Temperature:</b> <span id=\"temp\">N/A</span> &deg;C</p>"
                        "<p><b>Humidity:</b> <span id=\"humid\">N/A</span> %</p>";
         } else {
-             content += "<p class='section-title'>Current Readings</p>"
+            content += "<p class='section-title'>Current Readings</p>"
                        "<p><b>Last Update Time:</b> <span id=\"time\">N/A</span></p>"
                        "<p><b>Temperature:</b> <span id=\"temp\">N/A</span></p>"
                        "<p><b>Humidity:</b> <span id=\"humid\">N/A</span></p>";
@@ -450,4 +436,38 @@ String getUptime() {
     uptime_str += " seconds";
 
     return uptime_str;
+}
+
+SensorData read_dht_sensor() {
+    SensorData data;
+    data.temperature = NAN;
+    data.humidity = NAN;
+    data.success = false;
+
+    for (int i = 0; i < DHT_RETRIES; i++) {
+        data.temperature = dht.readTemperature();
+        data.humidity = dht.readHumidity();
+        if (!isnan(data.temperature) && !isnan(data.humidity)) {
+            data.success = true;
+            break; // Success, exit the retry loop
+        }
+        delay(200); // Small delay between retries
+    }
+    return data;
+}
+
+float read_battery_voltage() {
+    if (!boardConfig.isBatteryPowered || boardConfig.battPin <= 0) {
+        return 0.0; // Return 0 if not battery powered or no pin is set
+    }
+
+    float totalHalfVoltageValue = 0.0;
+    for (int i = 0; i < VOLT_READS; i++) {
+        totalHalfVoltageValue += analogRead(boardConfig.battPin);
+        delay(50);
+    }
+    float halfVoltageValue = totalHalfVoltageValue / VOLT_READS;
+    float volts = halfVoltageValue / RAW_VOLTS_CONVERSION;
+
+    return volts;
 }
