@@ -19,7 +19,7 @@ const char* MQTT_HUMID_TOPIC = "/tempset-humidity/set";
 const char* MQTT_DEBUG_TOPIC = "/debug";
 const char* MQTT_BATTERY_TOPIC = "/battery/set";
 
-//OTA Update server details
+// OTA Update server details
 const char* OTA_HOST = "watsonia22.com";
 const int OTA_PORT = 80;
 const char* OTA_BIN_PATH = "/sensor/firmware.bin";
@@ -56,49 +56,49 @@ const BoardConfig boardConfigs[] = {
         30                   // Time to sleep in seconds
     },
     {
-        "30:C6:F7:43:FE:B0",    // Mac address of the board
-        "bedroom", // Room name
-        false,   // Battery powered
-        23,      // DHT pin
-        DHT22,   // DHT type
-        2,       // LED pin
-        0,       // Battery pin (not used for mains powered)
-        30       // Time to sleep in seconds
+        "30:C6:F7:43:FE:B0", // Mac address of the board
+        "bedroom",           // Room name
+        false,               // Battery powered
+        23,                  // DHT pin
+        DHT22,               // DHT type
+        2,                   // LED pin
+        0,                   // Battery pin (not used for mains powered)
+        30                   // Time to sleep in seconds
     },
     {
-        "24:6F:28:A1:96:E4",        // Mac address of the board
-        "livingroom", // Room name
-        false,        // Battery powered
-        23,           // DHT pin
-        DHT22,        // DHT type
-        2,            // LED pin
-        0,            // Battery pin (not used for mains powered)
-        30            // Time to sleep in seconds
+        "24:6F:28:A1:96:E4", // Mac address of the board
+        "livingroom",        // Room name
+        false,               // Battery powered
+        23,                  // DHT pin
+        DHT22,               // DHT type
+        2,                   // LED pin
+        0,                   // Battery pin (not used for mains powered)
+        30                   // Time to sleep in seconds
     },
     {
-        "24:6F:28:9D:A8:F0",     // Mac address of the board
-        "guest", // Room name
-        false,     // Battery powered
-        23,        // DHT pin
-        DHT22,     // DHT type
-        2,         // LED pin
-        0,         // Battery pin (not used for mains powered)
-        30         // Time to sleep in seconds
+        "24:6F:28:9D:A8:F0", // Mac address of the board
+        "guest",             // Room name
+        false,               // Battery powered
+        23,                  // DHT pin
+        DHT22,               // DHT type
+        2,                   // LED pin
+        0,                   // Battery pin (not used for mains powered)
+        30                   // Time to sleep in seconds
     },
     {
-        "24:0A:C4:25:91:08",   // Mac address of the board
-        "outside", // Room name
-        true,      // Battery powered
-        23,        // DHT pin
-        DHT22,     // DHT type
-        2,         // LED pin
-        35,        // Battery pin (not used for mains powered)
-        600        // Time to sleep in seconds
+        "24:0A:C4:25:91:08", // Mac address of the board
+        "outside",           // Room name
+        true,                // Battery powered
+        23,                  // DHT pin
+        DHT22,               // DHT type
+        2,                   // LED pin
+        35,                  // Battery pin (not used for mains powered)
+        600                  // Time to sleep in seconds
     },
 };
 
 // Function to get board configuration based on MAC address
-BoardConfig getBoardConfig(char * mac) {
+BoardConfig getBoardConfig(char* mac) {
     // Find the matching configuration
     for (const auto& config : boardConfigs) {
         if (strcmp(mac, config.macAddress) == 0) {
@@ -112,6 +112,5 @@ BoardConfig getBoardConfig(char * mac) {
     return {"00:00:00:00:00:00", // Default MAC
             "default",           false, 4, DHT22, 0, 0, 30};
 }
-
 
 #endif // ESP32_CONFIG_H
