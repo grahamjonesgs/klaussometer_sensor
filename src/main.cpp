@@ -287,32 +287,30 @@ void setup_OTA_web() {
     webServer.on("/", HTTP_GET, []() {
         String content;
         content.reserve(1024);
-        content = "<p class='section-title'>Device Info</p>"
-                         "<p><b>Firmware Version:</b> " +
-                         String(FIRMWARE_VERSION) +
-                         "</p>"
-                         "<p><b>MAC Address:</b> " +
-                         macAddress +
-                         "</p>"
-                         "<p><b>Room:</b> " +
-                         String(boardConfig.roomName) +
-                         "</p>"
-                         "<p><b>Uptime:</b> " +
-                         getUptime() + "</p>";
+        content = "<p class='section-title'>Device Information</p>"
+                  "<p><b>Firmware Version:</b> " +
+                  String(FIRMWARE_VERSION) +
+                  "</p>"
+                  "<p><b>MAC Address:</b> " +
+                  macAddress +
+                  "</p>"
+                  "<p><b>Room:</b> " +
+                  String(boardConfig.roomName) + "</p>"
+                  "<p><b>Uptime:</b> <span id=\"uptime\">N/A</span></p>";
 
-        content += "<p class='section-title'>Last Reading</p>"
-                   "<p><b>Time:</b> " +
-                   String(lastReadingTimeStr) +
-                   "</p>"
-                   "<p><b>Temperature:</b> " +
-                   String(lastTemp, 1) +
-                   " &deg;C</p>"
-                   "<p><b>Humidity:</b> " +
-                   String(lastHumid, 0) + " %</p>";
-
-        // Conditionally add battery information
+        if (strncmp(lastReadingTimeStr, "N/A", 3) != 0) {
+            content += "<p class='section-title'>Current Readings</p>"
+                       "<p><b>Last Update Time:</b> <span id=\"time\">N/A</span></p>"
+                       "<p><b>Temperature:</b> <span id=\"temp\">N/A</span> &deg;C</p>"
+                       "<p><b>Humidity:</b> <span id=\"humid\">N/A</span> %</p>";
+        } else {
+             content += "<p class='section-title'>Current Readings</p>"
+                       "<p><b>Last Update Time:</b> <span id=\"time\">N/A</span></p>"
+                       "<p><b>Temperature:</b> <span id=\"temp\">N/A</span></p>"
+                       "<p><b>Humidity:</b> <span id=\"humid\">N/A</span></p>";
+        }
         if (boardConfig.isBatteryPowered) {
-            content += "<p><b>Battery Voltage:</b> " + String(lastVolts, 2) + " V</p>";
+            content += "<p><b>Battery Voltage:</b> <span id=\"voltage\">N/A</span> V</p>";
         }
 
         String html;
@@ -320,6 +318,13 @@ void setup_OTA_web() {
         html = info_html;
         html.replace("{{content}}", content);
         webServer.send(200, "text/html", html);
+    });
+
+    webServer.on("/data", HTTP_GET, []() {
+        char dataBuffer[256];
+        snprintf(dataBuffer, sizeof(dataBuffer), "{\"temperature\":%.1f, \"humidity\":%.0f, \"voltage\":%.2f, \"time\":\"%s\", \"uptime\":\"%s\"}", lastTemp, lastHumid, lastVolts,
+                 lastReadingTimeStr, getUptime().c_str());
+        webServer.send(200, "application/json", dataBuffer);
     });
 
     webServer.on("/update", HTTP_GET, []() {

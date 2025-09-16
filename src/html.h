@@ -62,6 +62,43 @@ const char* info_html = R"=====(
     <h1>Klaussometer Sensor Info</h1>
     {{content}}
     <a href="/update" class="link-button">Update Firmware</a>
+    <script>
+        // Function to fetch and update data
+        function updateData() {
+            // Use the XMLHttpRequest object to make an AJAX request
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                // Check if the request is complete and successful
+                if (this.readyState == 4 && this.status == 200) {
+                    // Parse the JSON response
+                    var data = JSON.parse(this.responseText);
+
+                    // Update the HTML elements with the new data
+                    document.getElementById('time').innerHTML = data.time;
+                    document.getElementById('temp').innerHTML = data.temperature;
+                    document.getElementById('humid').innerHTML = data.humidity;
+                    // Update voltage only if the element exists (for mains-powered devices)
+                    var voltageElement = document.getElementById('voltage');
+                    if (voltageElement) {
+                        voltageElement.innerHTML = data.voltage;
+                    }
+                    document.getElementById('uptime').innerHTML = data.uptime;
+                }
+            };
+            // Open a GET request to the /data endpoint
+            xhttp.open("GET", "/data", true);
+            // Send the request
+            xhttp.send();
+        }
+
+        // Call the function once when the page loads
+        window.onload = function() {
+            updateData();
+        };
+
+        // Set up a timer to call updateData() every 5 seconds (5000 milliseconds)
+        setInterval(updateData, 5000);
+    </script>
   </div>
 </body>
 </html>
