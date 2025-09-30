@@ -9,15 +9,9 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
-#include <time.h>
 
 // Constants
-#define MICROSECONDS_IN_SECOND 1000000ULL // Conversion factor for microseconds to seconds
-#define WIFI_RETRIES 5                    // Number of times to retry WiFi before a restart
-#define MQTT_RETRIES 5                    // Number of times to retry MQTT before a restart
-#define DHT_RETRIES 5                     // Number of times to retry DHT reads before giving up
-#define VOLT_READS 10                     // Number of times to read the voltage for averaging
-#define RAW_VOLTS_CONVERSION 620.5        // Mapping raw input back to voltage
+const uint64_t MICROSECONDS_IN_SECOND = 1000000ULL; // Conversion factor for microseconds to seconds
 
 // RTC Memory variables (persist during deep sleep)
 RTC_DATA_ATTR int bootCount = 0;
@@ -135,7 +129,7 @@ void loop() {
     strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
     lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
 
-    lastVolts = 0.0; // Initialize lastVolts
+    lastVolts = 0.0;          // Initialize lastVolts
     batteryMessage[0] = '\0'; // Clear the battery message buffer
 
     if (boardConfig.isBatteryPowered && boardConfig.battPin > 0) {
@@ -145,14 +139,15 @@ void loop() {
     }
 
     char mqttMessage[256];
-    snprintf(mqttMessage, sizeof(mqttMessage), "%s | T: %.1f | H: %.0f%s | Boot: %d | Success: %d", timeBuffer, reading.temperature, reading.humidity, batteryMessage, bootCount, successCount);
+    snprintf(mqttMessage, sizeof(mqttMessage), "%s | T: %.1f | H: %.0f%s | Boot: %d | Success: %d", timeBuffer, reading.temperature, reading.humidity, batteryMessage, bootCount,
+             successCount);
     debug_message(mqttMessage, true);
     mqttSendFloat(temperature_topic, reading.temperature);
     mqttSendFloat(humidity_topic, reading.humidity);
 
     // Conditional deep sleep or time-based wait
     if (boardConfig.isBatteryPowered) {
-         delay(1000); // Wait for messages to be sent
+        delay(1000); // Wait for messages to be sent
         WiFi.disconnect();
         deep_sleep(boardConfig.timeToSleep);
     } else {
@@ -224,7 +219,7 @@ void MQTT_reconnect() {
             }
         }
         debug_message("Connecting to MQTT broker...", false);
-        if (mqttClient.connect(MQTT_SERVER, 1883)) {
+        if (mqttClient.connect(MQTT_SERVER, MQTT_PORT)) {
             debug_message("MQTT link OK", false);
         } else {
             debug_message("[Error] MQTT not connected: ", false);
@@ -273,31 +268,31 @@ void setup_OTA_web() {
         String content;
         content.reserve(1024);
         content = "<p class='section-title'>Device Information</p>"
-                  "<p><b>Firmware Version:</b> " +
-                  String(FIRMWARE_VERSION) +
-                  "</p>"
-                  "<p><b>MAC Address:</b> " +
-                  macAddress +
-                  "</p>"
-                  "<p><b>Room:</b> " +
-                  String(boardConfig.roomName) +
-                  "</p>"
-                  "<p><b>Uptime:</b> <span id=\"uptime\">N/A</span></p>";
+                  "<table class='data-table'>" 
+                  "<tr><td><b>Firmware Version:</b></td><td>" + String(FIRMWARE_VERSION) + "</td></tr>"
+                  "<tr><td><b>MAC Address:</b></td><td>" + macAddress + "</td></tr>"
+                  "<tr><td><b>Room:</b></td><td>" + String(boardConfig.displayName) + "</td></tr>"
+                  "<tr><td><b>Uptime:</b></td><td><span id=\"uptime\">N/A</span></td></tr>"
+                  "</table>";
+
+        // --- CURRENT READINGS TABLE ---
+        content += "<p class='section-title'>Current Readings</p>"
+                   "<table class='data-table'>";
 
         if (strncmp(lastReadingTimeStr, "N/A", 3) != 0) {
-            content += "<p class='section-title'>Current Readings</p>"
-                       "<p><b>Last Update Time:</b> <span id=\"time\">N/A</span></p>"
-                       "<p><b>Temperature:</b> <span id=\"temp\">N/A</span> &deg;C</p>"
-                       "<p><b>Humidity:</b> <span id=\"humid\">N/A</span> %</p>";
+            content += "<tr><td><b>Last Update Time:</b></td><td><span id=\"time\">N/A</span></td></tr>"
+                       "<tr><td><b>Temperature:</b></td><td><span id=\"temp\">N/A</span> &deg;C</td></tr>"
+                       "<tr><td><b>Humidity:</b></td><td><span id=\"humid\">N/A</span> %</td></tr>";
         } else {
-            content += "<p class='section-title'>Current Readings</p>"
-                       "<p><b>Last Update Time:</b> <span id=\"time\">N/A</span></p>"
-                       "<p><b>Temperature:</b> <span id=\"temp\">N/A</span></p>"
-                       "<p><b>Humidity:</b> <span id=\"humid\">N/A</span></p>";
+            content += "<tr><td><b>Last Update Time:</b></td><td><span id=\"time\">N/A</span></td></tr>"
+                       "<tr><td><b>Temperature:</b></td><td><span id=\"temp\">N/A</span></td></tr>"
+                       "<tr><td><b>Humidity:</b></td><td><span id=\"humid\">N/A</span></td></tr>";
         }
+
         if (boardConfig.isBatteryPowered) {
-            content += "<p><b>Battery Voltage:</b> <span id=\"voltage\">N/A</span> V</p>";
+            content += "<tr><td><b>Battery Voltage:</b></td><td><span id=\"voltage\">N/A</span> V</td></tr>";
         }
+        content += "</table>"; 
 
         String html;
         html.reserve(1024);
@@ -422,18 +417,23 @@ String getUptime() {
     unsigned long minutes = (seconds % 3600) / 60;
     unsigned long remaining_seconds = seconds % 60;
 
+    // Determine the correct pluralization for "day"
+    const char* day_label = (days == 1) ? " day" : " days";
+
     // Create the formatted string
     String uptime_str;
     uptime_str.reserve(64);
     uptime_str = "";
     uptime_str += days;
-    uptime_str += " days, ";
+    uptime_str += day_label; // Use the correct label
+    uptime_str += ", ";
+
+    // Append the time in HH:MM:SS format (you may need to adjust the formatting here if you want leading zeros)
     uptime_str += hours;
-    uptime_str += " hours, ";
+    uptime_str += ":";
     uptime_str += minutes;
-    uptime_str += " minutes, ";
+    uptime_str += ":";
     uptime_str += remaining_seconds;
-    uptime_str += " seconds";
 
     return uptime_str;
 }

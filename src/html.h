@@ -20,13 +20,14 @@ const char* info_html = R"=====(
       padding: 30px;
       border-radius: 10px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      text-align: center;
+      /* text-align: center; <-- REMOVED to enable left alignment of content */
       width: 90%;
       max-width: 400px;
     }
     h1 {
       color: #007bff;
       margin-bottom: 20px;
+      text-align: center; /* <-- Added back to center the main title */
     }
     p {
         color: #555;
@@ -38,6 +39,7 @@ const char* info_html = R"=====(
         font-weight: bold;
         color: #007bff;
         margin-top: 20px;
+        text-align: left; /* <-- Explicitly left-align section titles */
     }
     .link-button {
         display: inline-block;
@@ -55,6 +57,22 @@ const char* info_html = R"=====(
     .link-button:hover {
       background-color: #0056b3;
     }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+    .data-table td {
+      padding: 4px 0;
+      text-align: left;
+      font-size: 14px;
+      color: #555;
+    }
+    .data-table tr td:first-child {
+      width: 50%; /* Sets the fixed width for the label column across both tables */
+      white-space: nowrap;
+      padding-right: 10px; /* <-- ADDED SPACE BEFORE THE VALUE */
+    }  
   </style>
 </head>
 <body>
@@ -159,6 +177,22 @@ const char* ota_html = R"=====(
     }
     input[type="submit"]:hover {
       background-color: #0056b3;
+    }
+    .data-table {
+      width: 100%; /* Make the table take full width of the container */
+      border-collapse: collapse; /* Remove double lines between cells */
+      margin-bottom: 10px; /* Space after the table */
+    }
+    .data-table td {
+      padding: 4px 0; /* Add some vertical spacing */
+      text-align: left; /* Ensure all content in table cells is left-aligned */
+      font-size: 14px;
+      color: #555;
+    }
+    .data-table tr td:first-child {
+      width: 50%; /* Give labels about half the table width */
+      white-space: nowrap; /* Prevent labels from wrapping */
+      padding-right: 10px; /* Add space between label and value */
     }
   </style>
 </head>
