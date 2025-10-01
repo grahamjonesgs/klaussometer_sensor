@@ -444,22 +444,16 @@ String getUptime() {
     // Determine the correct pluralization for "day"
     const char* day_label = (days == 1) ? " day" : " days";
 
-    // Create the formatted string
-    String uptime_str;
-    uptime_str.reserve(64);
-    uptime_str = "";
-    uptime_str += days;
-    uptime_str += day_label; // Use the correct label
-    uptime_str += ", ";
+    char buffer[64];
 
-    // Append the time in HH:MM:SS format (you may need to adjust the formatting here if you want leading zeros)
-    uptime_str += hours;
-    uptime_str += ":";
-    uptime_str += minutes;
-    uptime_str += ":";
-    uptime_str += remaining_seconds;
+    snprintf(buffer, sizeof(buffer), "%lu%s, %02lu:%02lu:%02lu",
+             days,
+             day_label,
+             hours,
+             minutes,
+             remaining_seconds);
 
-    return uptime_str;
+    return String(buffer);
 }
 
 SensorData read_dht_sensor() {

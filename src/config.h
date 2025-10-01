@@ -33,7 +33,7 @@ const int DHT_RETRIES = 5;                // Number of times to retry DHT reads 
 const int VOLT_READS = 10;                // Number of times to read the voltage for averaging
 const float RAW_VOLTS_CONVERSION = 620.5; // Mapping raw input back to voltage 4095 / 3.3  * voltage divider factor (2)
 
-const char* FIRMWARE_VERSION = "1.1.5";
+const char* FIRMWARE_VERSION = "1.1.6";
 
 // Global debug flags (can be overridden per board)
 const bool DEBUG_SERIAL = true;
