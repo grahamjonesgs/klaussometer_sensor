@@ -63,6 +63,7 @@ String getUptime();
 SensorData read_dht_sensor();
 float read_battery_voltage();
 void mqttSendFloat(const char* topic, float value);
+int compareVersions(const String& v1, const String& v2);
 
 void setup() {
     bootCount++;
@@ -238,16 +239,16 @@ void mqttSendFloat(const char* topic, float value) {
 // Send debug message to MQTT and/or Serial
 void debug_message(const char* message, bool retain) {
     char fullMessageBuffer[256];
+    snprintf(fullMessageBuffer, sizeof(fullMessageBuffer), "V%s | %s", FIRMWARE_VERSION, message);
+
     if (DEBUG_MQTT) {
         delay(100);
-        // add firmware version to beginning of message and send to debug topic
-        snprintf(fullMessageBuffer, sizeof(fullMessageBuffer), "V%s | %s", FIRMWARE_VERSION, message);
         mqttClient.beginMessage(debug_topic, retain);
         mqttClient.printf("%s", fullMessageBuffer);
         mqttClient.endMessage();
-
         delay(100);
     }
+
     if (DEBUG_SERIAL) {
         Serial.println(fullMessageBuffer);
     }
@@ -268,31 +269,47 @@ void setup_OTA_web() {
         String content;
         content.reserve(1024);
         content = "<p class='section-title'>Device Information</p>"
-                  "<table class='data-table'>" 
-                  "<tr><td><b>Firmware Version:</b></td><td>" + String(FIRMWARE_VERSION) + "</td></tr>"
-                  "<tr><td><b>MAC Address:</b></td><td>" + macAddress + "</td></tr>"
-                  "<tr><td><b>Room:</b></td><td>" + String(boardConfig.displayName) + "</td></tr>"
-                  "<tr><td><b>Uptime:</b></td><td><span id=\"uptime\">N/A</span></td></tr>"
+                  "<table class='data-table'>"
+                  "<tr><td><b>Firmware Version:</b></td><td>" +
+                  String(FIRMWARE_VERSION) +
+                  "</td></tr>"
+                  "<tr><td><b>MAC Address:</b></td><td>" +
+                  macAddress +
+                  "</td></tr>"
+                  "<tr><td><b>Room:</b></td><td>" +
+                  String(boardConfig.displayName) +
+                  "</td></tr>"
+                  "<tr><td><b>Uptime:</b></td><td><span id=\"uptime\">" +
+                  getUptime().c_str() +
+                  "</span></td></tr>"
                   "</table>";
 
-        // --- CURRENT READINGS TABLE ---
         content += "<p class='section-title'>Current Readings</p>"
                    "<table class='data-table'>";
 
-        if (strncmp(lastReadingTimeStr, "N/A", 3) != 0) {
-            content += "<tr><td><b>Last Update Time:</b></td><td><span id=\"time\">N/A</span></td></tr>"
-                       "<tr><td><b>Temperature:</b></td><td><span id=\"temp\">N/A</span> &deg;C</td></tr>"
-                       "<tr><td><b>Humidity:</b></td><td><span id=\"humid\">N/A</span> %</td></tr>";
-        } else {
+        if (strncmp(lastReadingTimeStr, "N/A", 3) == 0) {
+            // No successful readings yet
             content += "<tr><td><b>Last Update Time:</b></td><td><span id=\"time\">N/A</span></td></tr>"
                        "<tr><td><b>Temperature:</b></td><td><span id=\"temp\">N/A</span></td></tr>"
                        "<tr><td><b>Humidity:</b></td><td><span id=\"humid\">N/A</span></td></tr>";
+            if (boardConfig.isBatteryPowered) {
+                content += "<tr><td><b>Battery Voltage:</b></td><td><span id=\"voltage\">N/A</span></td></tr>";
+            }
+        } else {
+            // Display last known readings
+            content += "<tr><td><b>Last Update Time:</b></td><td><span id=\"time\">" + String(lastReadingTimeStr) +
+                       "</span></td></tr>"
+                       "<tr><td><b>Temperature:</b></td><td><span id=\"temp\">" +
+                       String(lastTemp, 1) +
+                       "</span> &deg;C</td></tr>"
+                       "<tr><td><b>Humidity:</b></td><td><span id=\"humid\">" +
+                       String(lastHumid, 0) + "</span> %</td></tr>";
+            if (boardConfig.isBatteryPowered) {
+                content += "<tr><td><b>Battery Voltage:</b></td><td><span id=\"voltage\">" + String(lastVolts, 2) + "</span> V</td></tr>";
+            }
         }
 
-        if (boardConfig.isBatteryPowered) {
-            content += "<tr><td><b>Battery Voltage:</b></td><td><span id=\"voltage\">N/A</span> V</td></tr>";
-        }
-        content += "</table>"; 
+        content += "</table>";
 
         String html;
         html.reserve(1024);
@@ -303,8 +320,15 @@ void setup_OTA_web() {
 
     webServer.on("/data", HTTP_GET, []() {
         char dataBuffer[256];
-        snprintf(dataBuffer, sizeof(dataBuffer), "{\"temperature\":%.1f, \"humidity\":%.0f, \"voltage\":%.2f, \"time\":\"%s\", \"uptime\":\"%s\"}", lastTemp, lastHumid, lastVolts,
-                 lastReadingTimeStr, getUptime().c_str());
+        if (strncmp(lastReadingTimeStr, "N/A", 3) == 0) {
+            // No successful readings yet
+            snprintf(dataBuffer, sizeof(dataBuffer), "{\"temperature\":\"%s\", \"humidity\":\"%s\", \"voltage\":%.2f, \"time\":\"%s\", \"uptime\":\"%s\"}", "N/A", "N/A", lastVolts,
+                     lastReadingTimeStr, getUptime().c_str());
+        } else {
+            // Display last known readings
+            snprintf(dataBuffer, sizeof(dataBuffer), "{\"temperature\":%.1f, \"humidity\":%.0f, \"voltage\":%.2f, \"time\":\"%s\", \"uptime\":\"%s\"}", lastTemp, lastHumid,
+                     lastVolts, lastReadingTimeStr, getUptime().c_str());
+        }
         webServer.send(200, "application/json", dataBuffer);
     });
 
@@ -358,7 +382,7 @@ void checkForUpdates() {
         if (httpCode == HTTP_CODE_OK) {
             String serverVersion = http.getString();
             serverVersion.trim();
-            if (serverVersion.compareTo(FIRMWARE_VERSION) > 0) {
+            if (compareVersions(serverVersion, FIRMWARE_VERSION) > 0) {
                 snprintf(debugMessage, sizeof(debugMessage), "New firmware version available: %s (current: %s)", serverVersion.c_str(), FIRMWARE_VERSION);
                 debug_message(debugMessage, true);
                 // Start the update
@@ -470,4 +494,26 @@ float read_battery_voltage() {
     float volts = halfVoltageValue / RAW_VOLTS_CONVERSION;
 
     return volts;
+}
+
+int compareVersions(const String& v1, const String& v2) {
+    int i = 0, j = 0;
+    while (i < v1.length() || j < v2.length()) {
+        int num1 = 0, num2 = 0;
+        while (i < v1.length() && v1[i] != '.') {
+            num1 = num1 * 10 + (v1[i] - '0');
+            i++;
+        }
+        while (j < v2.length() && v2[j] != '.') {
+            num2 = num2 * 10 + (v2[j] - '0');
+            j++;
+        }
+        if (num1 > num2)
+            return 1;
+        if (num1 < num2)
+            return -1;
+        i++;
+        j++;
+    }
+    return 0;
 }
