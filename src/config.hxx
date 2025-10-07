@@ -21,7 +21,7 @@
 
 //OTA Update server details
 const char* OTA_HOST = "YOUR_SERVER_IP_OR_DOMAIN";
-const int OTA_PORT = 80;
+const int OTA_PORT = 443;
 const char* OTA_BIN_PATH = "/firmware.bin";
 const char* OTA_VERSION_PATH = "/version.txt";
 

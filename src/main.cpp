@@ -38,7 +38,7 @@ WebServer webServer(80);
 float lastTemp = 0.0;
 float lastHumid = 0.0;
 float lastVolts = 0.0;
-char lastReadingTimeStr[20] = "N/A";
+char lastReadingTimeStr[50] = "N/A";
 char debugMessage[256];
 char batteryMessage[256] = "";
 
@@ -149,7 +149,6 @@ void loop() {
     // Conditional deep sleep or time-based wait
     if (boardConfig.isBatteryPowered) {
         delay(1000); // Wait for messages to be sent
-        WiFi.disconnect();
         deep_sleep(boardConfig.timeToSleep);
     } else {
         lastReadingTime = millis();
