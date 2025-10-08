@@ -81,8 +81,14 @@ void setup() {
 void loop() {
     // For mains-powered devices, wait until the next reading time.
     if (!boardConfig.isBatteryPowered) {
-        while (millis() - lastReadingTime < (boardConfig.timeToSleep * 1000)) {
-            webServer.handleClient(); // Handle OTA updates
+        unsigned long currentTime = millis();
+        unsigned long nextReadingTime = lastReadingTime + (boardConfig.timeToSleep * 1000UL);
+        
+        // Handle overflow-safe comparison
+        while ((long)(currentTime - nextReadingTime) < 0) {
+            webServer.handleClient();
+            delay(WEB_SERVER_POLL_INTERVAL_MS);  // Don't busy-wait
+            currentTime = millis();
         }
     }
 
@@ -375,7 +381,7 @@ void checkForUpdates() {
         HTTPClient http;
         // Check version
         char binUrl[256];
-        snprintf(binUrl, sizeof(binUrl), "https://%s:%d%s", OTA_HOST, 443, OTA_VERSION_PATH);
+        snprintf(binUrl, sizeof(binUrl), "https://%s:%d%s", OTA_HOST, OTA_PORT, OTA_VERSION_PATH);
         http.begin(binUrl);
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK) {
@@ -475,17 +481,35 @@ SensorData read_dht_sensor() {
 
 float read_battery_voltage() {
     if (!boardConfig.isBatteryPowered || boardConfig.battPin <= 0) {
-        return 0.0; // Return 0 if not battery powered or no pin is set
+        return 0.0;
     }
 
-    float totalHalfVoltageValue = 0.0;
-    for (int i = 0; i < VOLT_READS; i++) {
-        totalHalfVoltageValue += analogRead(boardConfig.battPin);
-        delay(50);
+    // Configure ADC for better accuracy
+    analogSetAttenuation(ADC_11db);  // 0-3.6V range
+    analogSetWidth(12);              // 12-bit resolution
+    
+    // Discard first reading (often inaccurate)
+    analogRead(boardConfig.battPin);
+    delay(10);
+    
+    uint32_t total = 0;
+    const int reads = VOLT_READS;
+    
+    for (int i = 0; i < reads; i++) {
+        total += analogRead(boardConfig.battPin);
+        delay(10); 
     }
-    float halfVoltageValue = totalHalfVoltageValue / VOLT_READS;
-    float volts = halfVoltageValue / RAW_VOLTS_CONVERSION;
-
+    
+    float avgRaw = (float)total / reads;
+    float volts = avgRaw / RAW_VOLTS_CONVERSION;
+    
+    // Apply basic smoothing with previous reading
+    static float lastVolts = 0.0;
+    if (lastVolts > 0.0) {
+        volts = (volts * 0.7) + (lastVolts * 0.3);  // Exponential smoothing
+    }
+    lastVolts = volts;
+    
     return volts;
 }
 
