@@ -8,7 +8,7 @@
 #include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
+#include <WiFiClient.h>
 
 // Constants
 const uint64_t MICROSECONDS_IN_SECOND = 1000000ULL; // Conversion factor for microseconds to seconds
@@ -30,7 +30,7 @@ char temperature_topic[50];
 char humidity_topic[50];
 char debug_topic[50];
 char battery_topic[50];
-WiFiClientSecure espClient;
+WiFiClient espClient;
 MqttClient mqttClient(espClient);
 DHT dht(0, 0);                   // Will be re-initialized with correct values in loadBoardConfig()
 long lastReadingTime = LONG_MIN; // Initialize to a large negative value
@@ -76,7 +76,7 @@ void setup() {
     // Initialize DHT sensor
     dht.begin();
     mqttClient.setUsernamePassword(MQTT_USER, MQTT_PASSWORD);
-    espClient.setInsecure();
+    //espClient.setInsecure();
 }
 
 void loop() {
