@@ -16,6 +16,7 @@ const uint64_t MICROSECONDS_IN_SECOND = 1000000ULL; // Conversion factor for mic
 // RTC Memory variables (persist during deep sleep)
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR int successCount = 0;
+RTC_DATA_ATTR float lastVolts = 0.0;
 
 struct SensorData {
     float temperature;
@@ -37,7 +38,6 @@ long lastReadingTime = LONG_MIN; // Initialize to a large negative value
 WebServer webServer(80);
 float lastTemp = 0.0;
 float lastHumid = 0.0;
-float lastVolts = 0.0;
 char lastReadingTimeStr[50] = "N/A";
 char debugMessage[256];
 char batteryMessage[256] = "";
@@ -73,10 +73,13 @@ void setup() {
     }
     // Load configuration based on MAC address
     loadBoardConfig();
+    if (boardConfig.isBatteryPowered && boardConfig.dhtPowerPin > 0) {
+        pinMode(boardConfig.dhtPowerPin, OUTPUT);
+        digitalWrite(boardConfig.dhtPowerPin, LOW); // Start with sensor off
+    }
     // Initialize DHT sensor
     dht.begin();
     mqttClient.setUsernamePassword(MQTT_USER, MQTT_PASSWORD);
-    //espClient.setInsecure();
 }
 
 void loop() {
@@ -84,11 +87,11 @@ void loop() {
     if (!boardConfig.isBatteryPowered) {
         unsigned long currentTime = millis();
         unsigned long nextReadingTime = lastReadingTime + (boardConfig.timeToSleep * 1000UL);
-        
+
         // Handle overflow-safe comparison
         while ((long)(currentTime - nextReadingTime) < 0) {
             webServer.handleClient();
-            delay(WEB_SERVER_POLL_INTERVAL_MS);  // Don't busy-wait
+            delay(WEB_SERVER_POLL_INTERVAL_MS); // Don't busy-wait
             currentTime = millis();
         }
     }
@@ -137,7 +140,6 @@ void loop() {
     strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
     lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
 
-    lastVolts = 0.0;          // Initialize lastVolts
     batteryMessage[0] = '\0'; // Clear the battery message buffer
 
     if (boardConfig.isBatteryPowered && boardConfig.battPin > 0) {
@@ -177,7 +179,7 @@ void loadBoardConfig() {
     snprintf(battery_topic, sizeof(battery_topic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_BATTERY_TOPIC);
 
     // Re-configure DHT with the correct pin from the config
-    dht = DHT(boardConfig.dhtPin, boardConfig.dhtType);
+    dht = DHT(boardConfig.dhtDataPin, boardConfig.dhtType);
 }
 
 // Set up WiFi connection
@@ -204,11 +206,15 @@ bool setup_wifi() {
             snprintf(ipStr, sizeof(ipStr), "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
             snprintf(debugMessage, sizeof(debugMessage), "WiFi is OK => IP address is: %s", ipStr);
             debug_message(debugMessage, false);
-            setup_OTA_web();
         }
     }
-
-    return true;
+    if (!boardConfig.isBatteryPowered) {
+    static bool webServerStarted = false;
+    if (!webServerStarted) {
+        setup_OTA_web();
+        webServerStarted = true;
+    }
+}
 }
 
 // Reconnect to MQTT broker
@@ -266,7 +272,6 @@ void deep_sleep(int sleepSeconds) {
     snprintf(debugMessage, sizeof(debugMessage), "Entering deep sleep for %d seconds...", sleepSeconds);
     debug_message(debugMessage, false);
     WiFi.disconnect();
-    delay(1000);
     esp_deep_sleep_start();
 }
 
@@ -452,12 +457,7 @@ String getUptime() {
 
     char buffer[64];
 
-    snprintf(buffer, sizeof(buffer), "%lu%s, %02lu:%02lu:%02lu",
-             days,
-             day_label,
-             hours,
-             minutes,
-             remaining_seconds);
+    snprintf(buffer, sizeof(buffer), "%lu%s, %02lu:%02lu:%02lu", days, day_label, hours, minutes, remaining_seconds);
 
     return String(buffer);
 }
@@ -468,6 +468,11 @@ SensorData read_dht_sensor() {
     data.humidity = NAN;
     data.success = false;
 
+    if (boardConfig.isBatteryPowered) {
+        digitalWrite(boardConfig.dhtPowerPin, HIGH);
+        delay(2000); // Allow DHT sensor to stabilize
+    }
+
     for (int i = 0; i < DHT_RETRIES; i++) {
         data.temperature = dht.readTemperature();
         data.humidity = dht.readHumidity();
@@ -477,6 +482,11 @@ SensorData read_dht_sensor() {
         }
         delay(200); // Small delay between retries
     }
+
+    if (boardConfig.isBatteryPowered) {
+        digitalWrite(boardConfig.dhtPowerPin, LOW);
+    }
+
     return data;
 }
 
@@ -486,31 +496,30 @@ float read_battery_voltage() {
     }
 
     // Configure ADC for better accuracy
-    analogSetAttenuation(ADC_11db);  // 0-3.6V range
-    analogSetWidth(12);              // 12-bit resolution
-    
+    analogSetAttenuation(ADC_11db); // 0-3.6V range
+    analogSetWidth(12);             // 12-bit resolution
+
     // Discard first reading (often inaccurate)
     analogRead(boardConfig.battPin);
     delay(10);
-    
+
     uint32_t total = 0;
     const int reads = VOLT_READS;
-    
+
     for (int i = 0; i < reads; i++) {
         total += analogRead(boardConfig.battPin);
-        delay(10); 
+        delay(10);
     }
-    
+
     float avgRaw = (float)total / reads;
     float volts = avgRaw / RAW_VOLTS_CONVERSION;
-    
+
     // Apply basic smoothing with previous reading
-    static float lastVolts = 0.0;
     if (lastVolts > 0.0) {
-        volts = (volts * 0.7) + (lastVolts * 0.3);  // Exponential smoothing
+        volts = (volts * 0.7) + (lastVolts * 0.3); // Exponential smoothing
     }
     lastVolts = volts;
-    
+
     return volts;
 }
 
