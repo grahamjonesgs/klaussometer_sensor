@@ -75,7 +75,7 @@ void setup() {
     loadBoardConfig();
     if (boardConfig.isBatteryPowered && boardConfig.dhtPowerPin > 0) {
         pinMode(boardConfig.dhtPowerPin, OUTPUT);
-        digitalWrite(boardConfig.dhtPowerPin, LOW); // Start with sensor off
+        digitalWrite(boardConfig.dhtPowerPin, HIGH); // Power on early to warm up during WiFi connect
     }
     // Initialize DHT sensor
     dht.begin();
@@ -198,7 +198,7 @@ bool setup_wifi() {
         WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
         snprintf(debugMessage, sizeof(debugMessage), "Attempt %d to connect to WiFi...", counter);
         debug_message(debugMessage, false);
-        delay(3000);
+        delay(1000);
         counter++;
         if (WiFi.status() == WL_CONNECTED) {
             IPAddress ip = WiFi.localIP();
@@ -207,14 +207,18 @@ bool setup_wifi() {
             snprintf(debugMessage, sizeof(debugMessage), "WiFi is OK => IP address is: %s", ipStr);
             debug_message(debugMessage, false);
         }
+        else {
+            delay(3000);
+        }
     }
     if (!boardConfig.isBatteryPowered) {
-    static bool webServerStarted = false;
-    if (!webServerStarted) {
-        setup_OTA_web();
-        webServerStarted = true;
+        static bool webServerStarted = false;
+        if (!webServerStarted) {
+            setup_OTA_web();
+            webServerStarted = true;
+        }
     }
-}
+    return true;
 }
 
 // Reconnect to MQTT broker
@@ -468,10 +472,7 @@ SensorData read_dht_sensor() {
     data.humidity = NAN;
     data.success = false;
 
-    if (boardConfig.isBatteryPowered) {
-        digitalWrite(boardConfig.dhtPowerPin, HIGH);
-        delay(2000); // Allow DHT sensor to stabilize
-    }
+    // DHT already powered on in setup() for battery boards - no warmup delay needed here
 
     for (int i = 0; i < DHT_RETRIES; i++) {
         data.temperature = dht.readTemperature();
@@ -480,7 +481,7 @@ SensorData read_dht_sensor() {
             data.success = true;
             break; // Success, exit the retry loop
         }
-        delay(200); // Small delay between retries
+        delay(500); // Small delay between retries
     }
 
     if (boardConfig.isBatteryPowered) {
