@@ -119,14 +119,7 @@ void setup() {
     }
 
     if (boardConfig.sensors & SENSOR_SCD41) {
-        int sdaPin = boardConfig.i2cSdaPin >= 0 ? boardConfig.i2cSdaPin : 21;
-        int sclPin = boardConfig.i2cSclPin >= 0 ? boardConfig.i2cSclPin : 22;
-        Wire.begin(sdaPin, sclPin);
-        // stopPeriodicMeasurement in case of warm restart, then start
-        Wire.beginTransmission(SCD41_I2C_ADDR); Wire.write(0x3F); Wire.write(0x86); Wire.endTransmission();
-        delay(500);
-        Wire.beginTransmission(SCD41_I2C_ADDR); Wire.write(0x21); Wire.write(0xB1); Wire.endTransmission();
-        delay(100);
+        initScd41(boardConfig.i2cSdaPin, boardConfig.i2cSclPin);
     }
 
     if (boardConfig.sensors & SENSOR_JSY194G) {

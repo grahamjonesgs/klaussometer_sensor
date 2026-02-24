@@ -1,4 +1,10 @@
 #include "sensors.h"
+#include <PMS.h>
+#include <SensirionI2cScd4x.h>
+
+// File-scope sensor objects (Serial2 / Wire initialised by setup() before first use)
+static PMS               pms(Serial2);
+static SensirionI2cScd4x scd4x;
 
 SensorData readDhtSensor() {
     SensorData data;
@@ -56,99 +62,45 @@ float readBatteryVoltage() {
     return volts;
 }
 
-// Read PMS5003 particulate matter sensor via UART (Serial2)
-// Frame format: 32 bytes, starts with 0x42 0x4D
+// Initialise SCD41 via the Sensirion library; called from setup()
+void initScd41(int sdaPin, int sclPin) {
+    Wire.begin(sdaPin >= 0 ? sdaPin : 21, sclPin >= 0 ? sclPin : 22);
+    scd4x.begin(Wire, SCD41_I2C_ADDR);
+    scd4x.stopPeriodicMeasurement(); // safe no-op on first boot
+    delay(500);
+    scd4x.startPeriodicMeasurement();
+}
+
+// Read PMS5003 particulate matter sensor via the PMS library (Serial2)
 Pms5003Data readPms5003() {
     Pms5003Data data = {0, 0, 0, false};
 
-    uint32_t timeout = millis() + 2000;
-    while (millis() < timeout) {
-        if (Serial2.available() >= 32) {
-            // Discard bytes until we find the start sequence
-            while (Serial2.available() >= 32 && Serial2.peek() != 0x42) {
-                Serial2.read();
-            }
-            if (Serial2.available() < 32) break;
+    PMS::DATA pmsData;
+    if (!pms.readUntil(pmsData, 2000)) return data; // 2 s timeout
 
-            uint8_t frame[32];
-            Serial2.readBytes(frame, 32);
-
-            if (frame[0] != 0x42 || frame[1] != 0x4D) continue;
-
-            // Validate checksum (sum of bytes 0-29)
-            uint16_t checksum = 0;
-            for (int i = 0; i < 30; i++) checksum += frame[i];
-            uint16_t frameCheck = ((uint16_t)frame[30] << 8) | frame[31];
-            if (checksum != frameCheck) continue;
-
-            // Atmospheric PM values: bytes 10-15
-            data.pm1    = ((uint16_t)frame[10] << 8) | frame[11];
-            data.pm25   = ((uint16_t)frame[12] << 8) | frame[13];
-            data.pm10   = ((uint16_t)frame[14] << 8) | frame[15];
-            data.success = true;
-            return data;
-        }
-        delay(10);
-    }
+    data.pm1     = pmsData.PM_AE_UG_1_0;
+    data.pm25    = pmsData.PM_AE_UG_2_5;
+    data.pm10    = pmsData.PM_AE_UG_10_0;
+    data.success = true;
     return data;
 }
 
-// CRC8 for SCD41 (polynomial 0x31, init 0xFF)
-static uint8_t scd41Crc(uint8_t* data, size_t len) {
-    uint8_t crc = 0xFF;
-    for (size_t i = 0; i < len; i++) {
-        crc ^= data[i];
-        for (int b = 0; b < 8; b++) {
-            crc = (crc & 0x80) ? (crc << 1) ^ 0x31 : (crc << 1);
-        }
-    }
-    return crc;
-}
-
-// Send a 16-bit command to SCD41 via I2C
-static bool scd41SendCmd(uint16_t cmd) {
-    Wire.beginTransmission(SCD41_I2C_ADDR);
-    Wire.write((cmd >> 8) & 0xFF);
-    Wire.write(cmd & 0xFF);
-    return Wire.endTransmission() == 0;
-}
-
-// Read CO2, temperature and humidity from SCD41 via raw I2C
+// Read CO2, temperature and humidity from SCD41 via the Sensirion library
 Scd41Data readScd41() {
     Scd41Data data = {0, 0, 0, false};
 
-    // Check data ready flag (command 0xE4B8)
-    if (!scd41SendCmd(0xE4B8)) return data;
-    delay(1);
-    Wire.requestFrom((uint8_t)SCD41_I2C_ADDR, (uint8_t)3);
-    if (Wire.available() < 3) return data;
-    uint8_t statusMsb = Wire.read();
-    uint8_t statusLsb = Wire.read();
-    Wire.read(); // discard CRC
-    if (((statusMsb << 8) | statusLsb) == 0) return data; // Not ready
+    bool isDataReady = false;
+    if (scd4x.getDataReadyStatus(isDataReady) || !isDataReady) return data;
 
-    // Read measurement (command 0xEC05) — returns 9 bytes: CO2(2+CRC), T(2+CRC), RH(2+CRC)
-    if (!scd41SendCmd(0xEC05)) return data;
-    delay(1);
-    Wire.requestFrom((uint8_t)SCD41_I2C_ADDR, (uint8_t)9);
-    if (Wire.available() < 9) return data;
+    uint16_t co2 = 0;
+    float    temperature = 0.0f;
+    float    humidity    = 0.0f;
+    if (scd4x.readMeasurement(co2, temperature, humidity) || co2 == 0) return data;
 
-    uint8_t buf[9];
-    for (int i = 0; i < 9; i++) buf[i] = Wire.read();
-
-    // Validate CRCs
-    if (scd41Crc(buf,     2) != buf[2]) return data;
-    if (scd41Crc(buf + 3, 2) != buf[5]) return data;
-    if (scd41Crc(buf + 6, 2) != buf[8]) return data;
-
-    uint16_t co2Raw   = ((uint16_t)buf[0] << 8) | buf[1];
-    uint16_t tempRaw  = ((uint16_t)buf[3] << 8) | buf[4];
-    uint16_t humidRaw = ((uint16_t)buf[6] << 8) | buf[7];
-
-    data.co2         = co2Raw;
-    data.temperature = -45.0f + 175.0f * tempRaw  / 65535.0f;
-    data.humidity    = 100.0f * humidRaw / 65535.0f;
-    data.success     = (co2Raw > 0);
+    data.co2         = co2;
+    data.temperature = temperature;
+    data.humidity    = humidity;
+    data.success     = true;
     return data;
 }
 

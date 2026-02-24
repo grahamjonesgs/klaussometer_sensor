@@ -3,6 +3,7 @@
 
 #include "globals.h"
 
+void        initScd41(int sdaPin, int sclPin);
 SensorData  readDhtSensor();
 float       readBatteryVoltage();
 Pms5003Data readPms5003();

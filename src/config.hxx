@@ -58,6 +58,11 @@ enum SensorType : uint32_t {
     SENSOR_JSY194G = (1 << 3), // JSY-MK-194G AC power meter via Modbus RTU/UART
 };
 
+// Allow combining SensorType flags with | in board config initialisers
+inline SensorType operator|(SensorType a, SensorType b) {
+    return static_cast<SensorType>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+
 struct BoardConfig {
     const char* macAddress;
     const char* roomName;
