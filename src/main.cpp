@@ -39,6 +39,10 @@ char          lastReadingTimeStr[50] = "N/A";
 char          debugBuf[256];
 char          batteryMessage[256] = "";
 
+Pms5003Data lastPmsData   = {0, 0, 0, false};
+Scd41Data   lastScd41Data = {0, 0, 0, false};
+Jsy194gData lastJsyData   = {0, 0, 0, 0, 0, 0, false};
+
 // NTP settings (used only in loop)
 static const char* const ntpServer        = "pool.ntp.org";
 static constexpr long    gmtOffsetSec     = 7200;
@@ -216,6 +220,7 @@ void loop() {
         if (!pms.success) {
             debugMessage("PMS5003 read failed.", false);
         } else {
+            lastPmsData = pms;
             mqttSendFloat(pm1Topic,  pms.pm1);
             mqttSendFloat(pm25Topic, pms.pm25);
             mqttSendFloat(pm10Topic, pms.pm10);
@@ -228,9 +233,14 @@ void loop() {
         if (!scd.success) {
             debugMessage("SCD41 read failed.", false);
         } else {
+            lastScd41Data = scd;
             mqttSendFloat(co2Topic, scd.co2);
             // If no DHT present, use SCD41 temperature and humidity
             if (!(boardConfig.sensors & SENSOR_DHT)) {
+                lastTemp  = scd.temperature;
+                lastHumid = scd.humidity;
+                strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
+                lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
                 mqttSendFloat(temperatureTopic, scd.temperature);
                 mqttSendFloat(humidityTopic,    scd.humidity);
             }
@@ -243,6 +253,7 @@ void loop() {
         if (!jsy.success) {
             debugMessage("JSY-MK-194G read failed.", false);
         } else {
+            lastJsyData = jsy;
             mqttSendFloat(jsyVoltageTopic, jsy.voltage);
             mqttSendFloat(jsyCurrentTopic, jsy.current);
             mqttSendFloat(jsyPowerTopic,   jsy.power);

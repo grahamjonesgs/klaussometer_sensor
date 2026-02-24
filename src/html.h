@@ -81,40 +81,38 @@ const char* info_html = R"=====(
     {{content}}
     <a href="/update" class="link-button">Update Firmware</a>
     <script>
-        // Function to fetch and update data
+        function tryUpdate(id, value) {
+            var el = document.getElementById(id);
+            if (el) el.innerHTML = value;
+        }
+
         function updateData() {
-            // Use the XMLHttpRequest object to make an AJAX request
             var xhttp = new XMLHttpRequest();
             xhttp.onreadystatechange = function() {
-                // Check if the request is complete and successful
                 if (this.readyState == 4 && this.status == 200) {
-                    // Parse the JSON response
                     var data = JSON.parse(this.responseText);
-
-                    // Update the HTML elements with the new data
-                    document.getElementById('time').innerHTML = data.time;
-                    document.getElementById('temp').innerHTML = data.temperature;
-                    document.getElementById('humid').innerHTML = data.humidity;
-                    // Update voltage only if the element exists (for mains-powered devices)
-                    var voltageElement = document.getElementById('voltage');
-                    if (voltageElement) {
-                        voltageElement.innerHTML = data.voltage;
-                    }
-                    document.getElementById('uptime').innerHTML = data.uptime;
+                    tryUpdate('time',      data.time);
+                    tryUpdate('uptime',    data.uptime);
+                    tryUpdate('temp',      data.temperature);
+                    tryUpdate('humid',     data.humidity);
+                    tryUpdate('voltage',   data.voltage);
+                    tryUpdate('co2',       data.co2);
+                    tryUpdate('pm1',       data.pm1);
+                    tryUpdate('pm25',      data.pm25);
+                    tryUpdate('pm10',      data.pm10);
+                    tryUpdate('acVoltage', data.acVoltage);
+                    tryUpdate('acCurrent', data.acCurrent);
+                    tryUpdate('acPower',   data.acPower);
+                    tryUpdate('acPf',      data.acPf);
+                    tryUpdate('acFreq',    data.acFreq);
+                    tryUpdate('acEnergy',  data.acEnergy);
                 }
             };
-            // Open a GET request to the /data endpoint
             xhttp.open("GET", "/data", true);
-            // Send the request
             xhttp.send();
         }
 
-        // Call the function once when the page loads
-        window.onload = function() {
-            updateData();
-        };
-
-        // Set up a timer to call updateData() every 5 seconds (5000 milliseconds)
+        window.onload = function() { updateData(); };
         setInterval(updateData, 5000);
     </script>
   </div>

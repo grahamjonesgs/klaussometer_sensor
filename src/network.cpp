@@ -3,6 +3,7 @@
 #include <WiFi.h>
 
 bool setupWifi() {
+    bool wasConnected = (WiFi.status() == WL_CONNECTED);
     int counter = 1;
     while (WiFi.status() != WL_CONNECTED) {
         debugMessage("WiFi is not OK, reconnecting", false);
@@ -19,15 +20,13 @@ bool setupWifi() {
         debugMessage(debugBuf, false);
         delay(1000);
         counter++;
-        if (WiFi.status() == WL_CONNECTED) {
-            IPAddress ip = WiFi.localIP();
-            char ipStr[16];
-            snprintf(ipStr, sizeof(ipStr), "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
-            snprintf(debugBuf, sizeof(debugBuf), "WiFi is OK => IP address is: %s", ipStr);
-            debugMessage(debugBuf, false);
-        } else {
+        if (WiFi.status() != WL_CONNECTED) {
             delay(3000);
         }
+    }
+
+    if (!wasConnected) {
+        Serial.println("WiFi connected. IP: " + WiFi.localIP().toString());
     }
 
     if (!boardConfig.isBatteryPowered) {

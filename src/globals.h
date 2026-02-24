@@ -65,4 +65,9 @@ extern char          lastReadingTimeStr[50];
 extern char          debugBuf[256];
 extern char          batteryMessage[256];
 
+// Last known sensor readings (for web UI; success=false means no reading yet)
+extern Pms5003Data lastPmsData;
+extern Scd41Data   lastScd41Data;
+extern Jsy194gData lastJsyData;
+
 #endif // GLOBALS_H
