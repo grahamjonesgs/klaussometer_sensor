@@ -1,2 +1,4 @@
+sensirion/Sensirion I2C SCD4x@^1.1.0
 arduino-libraries/ArduinoMqttClient@^0.1.8
+fu-hsi/PMS Library@^1.1.0
 adafruit/DHT sensor library@^1.4.6

@@ -15,6 +15,10 @@
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/HTTPClient/src",
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/WiFiClientSecure/src",
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/WiFi/src",
+                "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/Sensirion I2C SCD4x/src",
+                "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/Sensirion Core/src",
+                "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/Wire/src",
+                "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/PMS Library/src",
                 "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/ArduinoMqttClient/src",
                 "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/DHT sensor library",
                 "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/Adafruit Unified Sensor",
@@ -102,7 +106,6 @@
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/SimpleBLE/src",
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/Ticker/src",
                 "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/WiFiProv/src",
-                "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/Wire/src",
                 ""
             ],
             "browse": {
@@ -115,6 +118,10 @@
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/HTTPClient/src",
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/WiFiClientSecure/src",
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/WiFi/src",
+                    "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/Sensirion I2C SCD4x/src",
+                    "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/Sensirion Core/src",
+                    "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/Wire/src",
+                    "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/PMS Library/src",
                     "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/ArduinoMqttClient/src",
                     "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/DHT sensor library",
                     "/Users/gjonesblackcyton/Documents/PlatformIO/Projects/klaussometer_sensor/.pio/libdeps/nodemcu-32s/Adafruit Unified Sensor",
@@ -202,7 +209,6 @@
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/SimpleBLE/src",
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/Ticker/src",
                     "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/WiFiProv/src",
-                    "/Users/gjonesblackcyton/.platformio/packages/framework-arduinoespressif32@3.10006.210326/libraries/Wire/src",
                     ""
                 ]
             },
