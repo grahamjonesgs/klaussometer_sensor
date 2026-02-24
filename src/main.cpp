@@ -27,10 +27,10 @@ struct SensorData {
 // Global variables
 BoardConfig boardConfig;
 char macAddress[18];
-char temperature_topic[50];
-char humidity_topic[50];
-char debug_topic[50];
-char battery_topic[50];
+char temperatureTopic[50];
+char humidityTopic[50];
+char debugTopic[50];
+char batteryTopic[50];
 WiFiClient espClient;
 MqttClient mqttClient(espClient);
 DHT dht(0, 0);                   // Will be re-initialized with correct values in loadBoardConfig()
@@ -39,29 +39,29 @@ WebServer webServer(80);
 float lastTemp = 0.0;
 float lastHumid = 0.0;
 char lastReadingTimeStr[50] = "N/A";
-char debugMessage[256];
+char debugBuf[256];
 char batteryMessage[256] = "";
 
 // Definitions for NTP time
 const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = 7200;
-const int daylightOffset_sec = 0;
+const long gmtOffsetSec = 7200;
+const int daylightOffsetSec = 0;
 struct tm timeinfo;
 char timeBuffer[50];
 
 // Function prototypes
-void deep_sleep(int sleepSeconds);
-void debug_message(const char* message, bool perm);
-void MQTT_reconnect();
-bool setup_wifi();
+void deepSleep(int sleepSeconds);
+void debugMessage(const char* message, bool perm);
+void mqttReconnect();
+bool setupWifi();
 void loadBoardConfig();
 BoardConfig getBoardConfig(char* mac);
-void setup_OTA_web();
+void setupOtaWeb();
 void updateFirmware();
 void checkForUpdates();
 String getUptime();
-SensorData read_dht_sensor();
-float read_battery_voltage();
+SensorData readDhtSensor();
+float readBatteryVoltage();
 void mqttSendFloat(const char* topic, float value);
 int compareVersions(const String& v1, const String& v2);
 
@@ -96,11 +96,11 @@ void loop() {
         }
     }
 
-    if (!setup_wifi()) {
+    if (!setupWifi()) {
         if (boardConfig.isBatteryPowered) {
-            deep_sleep(boardConfig.timeToSleep);
+            deepSleep(boardConfig.timeToSleep);
         } else {
-            debug_message("Failed to connect to WiFi, waiting for next cycle...", false);
+            debugMessage("Failed to connect to WiFi, waiting for next cycle...", false);
             lastReadingTime = millis();
             return;
         }
@@ -108,11 +108,11 @@ void loop() {
 
     checkForUpdates();
     if (!mqttClient.connected()) {
-        MQTT_reconnect();
+        mqttReconnect();
     }
 
     // Get current time from NTP
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    configTime(gmtOffsetSec, daylightOffsetSec, ntpServer);
     if (!getLocalTime(&timeinfo)) {
         strncpy(timeBuffer, "Time Error", sizeof(timeBuffer) - 1);
     } else {
@@ -120,13 +120,13 @@ void loop() {
     }
 
     // Read DHT sensor data with retries
-    SensorData reading = read_dht_sensor();
+    SensorData reading = readDhtSensor();
 
     if (!reading.success) {
-        snprintf(debugMessage, sizeof(debugMessage), "%s DHT read failed after %d retries.", timeBuffer, DHT_RETRIES);
-        debug_message(debugMessage, true);
+        snprintf(debugBuf, sizeof(debugBuf), "%s DHT read failed after %d retries.", timeBuffer, DHT_RETRIES);
+        debugMessage(debugBuf, true);
         if (boardConfig.isBatteryPowered) {
-            deep_sleep(boardConfig.timeToSleep);
+            deepSleep(boardConfig.timeToSleep);
         } else {
             lastReadingTime = millis();
             return;
@@ -143,22 +143,22 @@ void loop() {
     batteryMessage[0] = '\0'; // Clear the battery message buffer
 
     if (boardConfig.isBatteryPowered && boardConfig.battPin > 0) {
-        lastVolts = read_battery_voltage();
+        lastVolts = readBatteryVoltage();
         snprintf(batteryMessage, sizeof(batteryMessage), " | Bat: %.2fV", lastVolts);
-        mqttSendFloat(battery_topic, lastVolts);
+        mqttSendFloat(batteryTopic, lastVolts);
     }
 
     char mqttMessage[256];
     snprintf(mqttMessage, sizeof(mqttMessage), "%s | T: %.1f | H: %.0f%s | Boot: %d | Success: %d", timeBuffer, reading.temperature, reading.humidity, batteryMessage, bootCount,
              successCount);
-    debug_message(mqttMessage, true);
-    mqttSendFloat(temperature_topic, reading.temperature);
-    mqttSendFloat(humidity_topic, reading.humidity);
+    debugMessage(mqttMessage, true);
+    mqttSendFloat(temperatureTopic, reading.temperature);
+    mqttSendFloat(humidityTopic, reading.humidity);
 
     // Conditional deep sleep or time-based wait
     if (boardConfig.isBatteryPowered) {
         delay(1000); // Wait for messages to be sent
-        deep_sleep(boardConfig.timeToSleep);
+        deepSleep(boardConfig.timeToSleep);
     } else {
         lastReadingTime = millis();
     }
@@ -168,44 +168,44 @@ void loop() {
 void loadBoardConfig() {
     strncpy(macAddress, WiFi.macAddress().c_str(), sizeof(macAddress) - 1);
     macAddress[sizeof(macAddress) - 1] = '\0';
-    snprintf(debugMessage, sizeof(debugMessage), "Board MAC Address: %s", macAddress);
-    debug_message(debugMessage, false);
+    snprintf(debugBuf, sizeof(debugBuf), "Board MAC Address: %s", macAddress);
+    debugMessage(debugBuf, false);
     boardConfig = getBoardConfig(macAddress);
 
     // Set up topics based on the retrieved configuration
-    snprintf(temperature_topic, sizeof(temperature_topic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_TEMP_TOPIC);
-    snprintf(humidity_topic, sizeof(humidity_topic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_HUMID_TOPIC);
-    snprintf(debug_topic, sizeof(debug_topic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_DEBUG_TOPIC);
-    snprintf(battery_topic, sizeof(battery_topic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_BATTERY_TOPIC);
+    snprintf(temperatureTopic, sizeof(temperatureTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_TEMP_TOPIC);
+    snprintf(humidityTopic, sizeof(humidityTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_HUMID_TOPIC);
+    snprintf(debugTopic, sizeof(debugTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_DEBUG_TOPIC);
+    snprintf(batteryTopic, sizeof(batteryTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_BATTERY_TOPIC);
 
     // Re-configure DHT with the correct pin from the config
     dht = DHT(boardConfig.dhtDataPin, boardConfig.dhtType);
 }
 
 // Set up WiFi connection
-bool setup_wifi() {
+bool setupWifi() {
     int counter = 1;
     while (WiFi.status() != WL_CONNECTED) {
-        debug_message("WiFi is not OK, reconnecting", false);
+        debugMessage("WiFi is not OK, reconnecting", false);
         if (counter > WIFI_RETRIES) {
-            snprintf(debugMessage, sizeof(debugMessage), "WiFi connection failed after %d retries.", WIFI_RETRIES);
-            debug_message(debugMessage, false);
+            snprintf(debugBuf, sizeof(debugBuf), "WiFi connection failed after %d retries.", WIFI_RETRIES);
+            debugMessage(debugBuf, false);
             return false;
         }
         WiFi.disconnect();
         WiFi.mode(WIFI_STA);
         WiFi.enableSTA(true);
         WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-        snprintf(debugMessage, sizeof(debugMessage), "Attempt %d to connect to WiFi...", counter);
-        debug_message(debugMessage, false);
+        snprintf(debugBuf, sizeof(debugBuf), "Attempt %d to connect to WiFi...", counter);
+        debugMessage(debugBuf, false);
         delay(1000);
         counter++;
         if (WiFi.status() == WL_CONNECTED) {
             IPAddress ip = WiFi.localIP();
             char ipStr[16];
             snprintf(ipStr, sizeof(ipStr), "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
-            snprintf(debugMessage, sizeof(debugMessage), "WiFi is OK => IP address is: %s", ipStr);
-            debug_message(debugMessage, false);
+            snprintf(debugBuf, sizeof(debugBuf), "WiFi is OK => IP address is: %s", ipStr);
+            debugMessage(debugBuf, false);
         }
         else {
             delay(3000);
@@ -214,7 +214,7 @@ bool setup_wifi() {
     if (!boardConfig.isBatteryPowered) {
         static bool webServerStarted = false;
         if (!webServerStarted) {
-            setup_OTA_web();
+            setupOtaWeb();
             webServerStarted = true;
         }
     }
@@ -222,24 +222,24 @@ bool setup_wifi() {
 }
 
 // Reconnect to MQTT broker
-void MQTT_reconnect() {
+void mqttReconnect() {
     int counter = 1;
     while (!mqttClient.connected()) {
         if (counter > MQTT_RETRIES) {
-            snprintf(debugMessage, sizeof(debugMessage), "[Error] MQTT connection failed after %d retries.", MQTT_RETRIES);
-            debug_message(debugMessage, false);
+            snprintf(debugBuf, sizeof(debugBuf), "[Error] MQTT connection failed after %d retries.", MQTT_RETRIES);
+            debugMessage(debugBuf, false);
             // This is a major error; on battery, we deep sleep. For mains, we continue the loop.
             if (boardConfig.isBatteryPowered) {
-                deep_sleep(boardConfig.timeToSleep);
+                deepSleep(boardConfig.timeToSleep);
             } else {
                 ESP.restart();
             }
         }
-        debug_message("Connecting to MQTT broker...", false);
+        debugMessage("Connecting to MQTT broker...", false);
         if (mqttClient.connect(MQTT_SERVER, MQTT_PORT)) {
-            debug_message("MQTT link OK", false);
+            debugMessage("MQTT link OK", false);
         } else {
-            debug_message("[Error] MQTT not connected: ", false);
+            debugMessage("[Error] MQTT not connected: ", false);
             delay(3000);
         }
         counter++;
@@ -253,13 +253,13 @@ void mqttSendFloat(const char* topic, float value) {
 }
 
 // Send debug message to MQTT and/or Serial
-void debug_message(const char* message, bool retain) {
+void debugMessage(const char* message, bool retain) {
     char fullMessageBuffer[256];
     snprintf(fullMessageBuffer, sizeof(fullMessageBuffer), "V%s | %s", FIRMWARE_VERSION, message);
 
     if (DEBUG_MQTT) {
         delay(100);
-        mqttClient.beginMessage(debug_topic, retain);
+        mqttClient.beginMessage(debugTopic, retain);
         mqttClient.printf("%s", fullMessageBuffer);
         mqttClient.endMessage();
         delay(100);
@@ -271,15 +271,15 @@ void debug_message(const char* message, bool retain) {
 }
 
 // Enter deep sleep for a specified number of seconds
-void deep_sleep(int sleepSeconds) {
+void deepSleep(int sleepSeconds) {
     esp_sleep_enable_timer_wakeup(sleepSeconds * MICROSECONDS_IN_SECOND);
-    snprintf(debugMessage, sizeof(debugMessage), "Entering deep sleep for %d seconds...", sleepSeconds);
-    debug_message(debugMessage, false);
+    snprintf(debugBuf, sizeof(debugBuf), "Entering deep sleep for %d seconds...", sleepSeconds);
+    debugMessage(debugBuf, false);
     WiFi.disconnect();
     esp_deep_sleep_start();
 }
 
-void setup_OTA_web() {
+void setupOtaWeb() {
     webServer.on("/", HTTP_GET, []() {
         String content;
         content.reserve(1024);
@@ -375,7 +375,7 @@ void setup_OTA_web() {
                 }
             } else if (upload.status == UPLOAD_FILE_END) {
                 if (Update.end(true)) {
-                    debug_message("Update Success, rebooting...\n", true);
+                    debugMessage("Update Success, rebooting...\n", true);
                     delay(1000);
                 } else {
                     Update.printError(Serial);
@@ -398,17 +398,17 @@ void checkForUpdates() {
             String serverVersion = http.getString();
             serverVersion.trim();
             if (compareVersions(serverVersion, FIRMWARE_VERSION) > 0) {
-                snprintf(debugMessage, sizeof(debugMessage), "New firmware version available: %s (current: %s)", serverVersion.c_str(), FIRMWARE_VERSION);
-                debug_message(debugMessage, true);
+                snprintf(debugBuf, sizeof(debugBuf), "New firmware version available: %s (current: %s)", serverVersion.c_str(), FIRMWARE_VERSION);
+                debugMessage(debugBuf, true);
                 // Start the update
                 updateFirmware();
             }
         } else {
-            debug_message("Error fetching version file.", true);
+            debugMessage("Error fetching version file.", true);
         }
         http.end();
     } else {
-        debug_message("WiFi not connected. Cannot check for updates.", false);
+        debugMessage("WiFi not connected. Cannot check for updates.", false);
     }
 }
 
@@ -422,51 +422,51 @@ void updateFirmware() {
         int contentLength = http.getSize();
         bool canBegin = Update.begin(contentLength);
         if (canBegin) {
-            debug_message("Beginning OTA update. This may take a few moments...", true);
+            debugMessage("Beginning OTA update. This may take a few moments...", true);
             WiFiClient& client = http.getStream();
             size_t written = Update.writeStream(client);
             if (written == contentLength) {
-                debug_message("OTA update written successfully.", true);
+                debugMessage("OTA update written successfully.", true);
             } else {
-                debug_message("OTA update failed to write completely.", true);
+                debugMessage("OTA update failed to write completely.", true);
             }
             if (Update.end()) {
-                debug_message("Update finished successfully. Restarting...", true);
+                debugMessage("Update finished successfully. Restarting...", true);
                 ESP.restart();
             } else {
-                snprintf(debugMessage, sizeof(debugMessage), "Error during OTA update: %s", Update.errorString());
-                debug_message(debugMessage, true);
+                snprintf(debugBuf, sizeof(debugBuf), "Error during OTA update: %s", Update.errorString());
+                debugMessage(debugBuf, true);
             }
         } else {
-            debug_message("Not enough space to start OTA update.", true);
+            debugMessage("Not enough space to start OTA update.", true);
         }
     } else {
-        snprintf(debugMessage, sizeof(debugMessage), "HTTP GET failed, error: %d", httpCode);
-        debug_message(debugMessage, true);
+        snprintf(debugBuf, sizeof(debugBuf), "HTTP GET failed, error: %d", httpCode);
+        debugMessage(debugBuf, true);
     }
     http.end();
 }
 
 String getUptime() {
-    unsigned long uptime_ms = millis();
-    unsigned long seconds = uptime_ms / 1000;
+    unsigned long uptimeMs = millis();
+    unsigned long seconds = uptimeMs / 1000;
 
     unsigned long days = seconds / (24 * 3600);
     unsigned long hours = (seconds % (24 * 3600)) / 3600;
     unsigned long minutes = (seconds % 3600) / 60;
-    unsigned long remaining_seconds = seconds % 60;
+    unsigned long remainingSeconds = seconds % 60;
 
     // Determine the correct pluralization for "day"
-    const char* day_label = (days == 1) ? " day" : " days";
+    const char* dayLabel = (days == 1) ? " day" : " days";
 
     char buffer[64];
 
-    snprintf(buffer, sizeof(buffer), "%lu%s, %02lu:%02lu:%02lu", days, day_label, hours, minutes, remaining_seconds);
+    snprintf(buffer, sizeof(buffer), "%lu%s, %02lu:%02lu:%02lu", days, dayLabel, hours, minutes, remainingSeconds);
 
     return String(buffer);
 }
 
-SensorData read_dht_sensor() {
+SensorData readDhtSensor() {
     SensorData data;
     data.temperature = NAN;
     data.humidity = NAN;
@@ -491,7 +491,7 @@ SensorData read_dht_sensor() {
     return data;
 }
 
-float read_battery_voltage() {
+float readBatteryVoltage() {
     if (!boardConfig.isBatteryPowered || boardConfig.battPin <= 0) {
         return 0.0;
     }
