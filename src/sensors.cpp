@@ -12,7 +12,9 @@ SensorData readDhtSensor() {
     data.humidity    = NAN;
     data.success     = false;
 
-    // DHT already powered on in setup() for battery boards - no warmup delay needed here
+    // Short guard to ensure DHT22 has had enough stable power before the first read,
+    // even if WiFi/NTP completed unusually fast.
+    delay(DHT_INITIAL_DELAY_MS);
 
     for (int i = 0; i < DHT_RETRIES; i++) {
         data.temperature = dht.readTemperature();
@@ -21,7 +23,7 @@ SensorData readDhtSensor() {
             data.success = true;
             break;
         }
-        delay(500);
+        delay(DHT_RETRY_DELAY_MS); // DHT22 requires >=2 s between reads
     }
 
     if (boardConfig.isBatteryPowered) {
@@ -37,17 +39,17 @@ float readBatteryVoltage() {
     }
 
     // Configure ADC for better accuracy
-    analogSetAttenuation(ADC_11db); // 0-3.6V range
-    analogSetWidth(12);             // 12-bit resolution
+    analogSetAttenuation(ADC_11db);         // 0-3.6V range
+    analogSetWidth(ADC_BIT_WIDTH);
 
     // Discard first reading (often inaccurate)
     analogRead(boardConfig.battPin);
-    delay(10);
+    delay(ADC_SETTLE_DELAY_MS);
 
     uint32_t total = 0;
     for (int i = 0; i < VOLT_READS; i++) {
         total += analogRead(boardConfig.battPin);
-        delay(10);
+        delay(ADC_SETTLE_DELAY_MS);
     }
 
     float avgRaw = (float)total / VOLT_READS;
@@ -55,7 +57,7 @@ float readBatteryVoltage() {
 
     // Exponential smoothing with previous reading
     if (lastVolts > 0.0) {
-        volts = (volts * 0.7f) + (lastVolts * 0.3f);
+        volts = (volts * VOLT_SMOOTH_NEW) + (lastVolts * VOLT_SMOOTH_PREV);
     }
     lastVolts = volts;
 
@@ -64,10 +66,11 @@ float readBatteryVoltage() {
 
 // Initialise SCD41 via the Sensirion library; called from setup()
 void initScd41(int sdaPin, int sclPin) {
-    Wire.begin(sdaPin >= 0 ? sdaPin : 21, sclPin >= 0 ? sclPin : 22);
+    Wire.begin(sdaPin >= 0 ? sdaPin : SCD41_DEFAULT_SDA_PIN,
+               sclPin >= 0 ? sclPin : SCD41_DEFAULT_SCL_PIN);
     scd4x.begin(Wire, SCD41_I2C_ADDR);
     scd4x.stopPeriodicMeasurement(); // safe no-op on first boot
-    delay(500);
+    delay(SCD41_INIT_DELAY_MS);
     scd4x.startPeriodicMeasurement();
 }
 
@@ -76,7 +79,7 @@ Pms5003Data readPms5003() {
     Pms5003Data data = {0, 0, 0, false};
 
     PMS::DATA pmsData;
-    if (!pms.readUntil(pmsData, 2000)) return data; // 2 s timeout
+    if (!pms.readUntil(pmsData, PMS5003_READ_TIMEOUT_MS)) return data;
 
     data.pm1     = pmsData.PM_AE_UG_1_0;
     data.pm25    = pmsData.PM_AE_UG_2_5;
@@ -148,20 +151,20 @@ Jsy194gData readJsy194g() {
         digitalWrite(boardConfig.jsyDePin, LOW);
     }
 
-    // Expected response: addr(1) + FC(1) + byteCount(1) + data(16) + CRC(2) = 21 bytes
-    const int expectedBytes = 21;
-    uint32_t timeout = millis() + 300;
+    // Expected response: addr(1) + FC(1) + byteCount(1) + data(16) + CRC(2) = JSY_RESPONSE_BYTES
+    const int expectedBytes = JSY_RESPONSE_BYTES;
+    uint32_t timeout = millis() + JSY_RESPONSE_TIMEOUT_MS;
     while (Serial1.available() < expectedBytes && millis() < timeout) {
         delay(1);
     }
     if (Serial1.available() < expectedBytes) return data; // Timeout
 
-    uint8_t response[21];
+    uint8_t response[JSY_RESPONSE_BYTES];
     Serial1.readBytes(response, expectedBytes);
 
     // Validate CRC
     uint16_t respCrc = modbusCalcCrc(response, expectedBytes - 2);
-    if ((respCrc & 0xFF) != response[19] || ((respCrc >> 8) & 0xFF) != response[20]) {
+    if ((respCrc & 0xFF) != response[expectedBytes - 2] || ((respCrc >> 8) & 0xFF) != response[expectedBytes - 1]) {
         return data; // CRC mismatch
     }
 
@@ -182,12 +185,12 @@ Jsy194gData readJsy194g() {
     uint32_t rawEnergy  = ((uint32_t)response[15] << 24) | ((uint32_t)response[16] << 16)
                         | ((uint32_t)response[17] <<  8) |  (uint32_t)response[18];
 
-    data.voltage     = rawVoltage / 100.0f;
-    data.current     = rawCurrent / 100.0f;
-    data.power       = rawPower   / 10.0f;
-    data.powerFactor = rawPf      / 1000.0f;
-    data.frequency   = rawFreq    / 100.0f;
-    data.energy      = rawEnergy  / 1000.0f; // Wh → kWh
+    data.voltage     = rawVoltage / JSY_VOLTAGE_SCALE;
+    data.current     = rawCurrent / JSY_CURRENT_SCALE;
+    data.power       = rawPower   / JSY_POWER_SCALE;
+    data.powerFactor = rawPf      / JSY_PF_SCALE;
+    data.frequency   = rawFreq    / JSY_FREQ_SCALE;
+    data.energy      = rawEnergy  / JSY_ENERGY_SCALE;
     data.success     = true;
     return data;
 }
