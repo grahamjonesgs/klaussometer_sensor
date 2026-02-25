@@ -26,7 +26,8 @@ bool setupWifi() {
     }
 
     if (!wasConnected) {
-        Serial.println("WiFi connected. IP: " + WiFi.localIP().toString());
+        Serial.print("WiFi connected. IP: ");
+        Serial.println(WiFi.localIP());
     }
 
     if (!boardConfig.isBatteryPowered) {
@@ -45,11 +46,7 @@ void mqttReconnect() {
         if (counter > MQTT_RETRIES) {
             snprintf(debugBuf, sizeof(debugBuf), "[Error] MQTT connection failed after %d retries.", MQTT_RETRIES);
             debugMessage(debugBuf, false);
-            if (boardConfig.isBatteryPowered) {
-                ESP.restart(); // caller (main) handles deep sleep after reconnect fails
-            } else {
-                ESP.restart();
-            }
+            ESP.restart();
         }
         debugMessage("Connecting to MQTT broker...", false);
         if (mqttClient.connect(MQTT_SERVER, MQTT_PORT)) {
@@ -73,11 +70,9 @@ void debugMessage(const char* message, bool retain) {
     snprintf(fullMessageBuffer, sizeof(fullMessageBuffer), "V%s | %s", FIRMWARE_VERSION, message);
 
     if (DEBUG_MQTT) {
-        delay(100);
         mqttClient.beginMessage(debugTopic, retain);
         mqttClient.printf("%s", fullMessageBuffer);
         mqttClient.endMessage();
-        delay(100);
     }
 
     if (DEBUG_SERIAL) {

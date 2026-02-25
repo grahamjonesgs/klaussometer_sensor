@@ -17,8 +17,8 @@ SensorData readDhtSensor() {
     delay(DHT_INITIAL_DELAY_MS);
 
     for (int i = 0; i < DHT_RETRIES; i++) {
-        data.temperature = dht.readTemperature();
-        data.humidity    = dht.readHumidity();
+        data.temperature = dht->readTemperature();
+        data.humidity    = dht->readHumidity();
         if (!isnan(data.temperature) && !isnan(data.humidity)) {
             data.success = true;
             break;
@@ -76,7 +76,10 @@ void initScd41(int sdaPin, int sclPin) {
 
 // Read PMS5003 particulate matter sensor via the PMS library (Serial2)
 Pms5003Data readPms5003() {
-    Pms5003Data data = {0, 0, 0, false};
+    Pms5003Data data = {};
+
+    // Discard stale buffered frames so we read the freshest available sample
+    while (Serial2.available()) Serial2.read();
 
     PMS::DATA pmsData;
     if (!pms.readUntil(pmsData, PMS5003_READ_TIMEOUT_MS)) return data;
@@ -84,13 +87,16 @@ Pms5003Data readPms5003() {
     data.pm1     = pmsData.PM_AE_UG_1_0;
     data.pm25    = pmsData.PM_AE_UG_2_5;
     data.pm10    = pmsData.PM_AE_UG_10_0;
+    data.pm1Cf   = pmsData.PM_SP_UG_1_0;
+    data.pm25Cf  = pmsData.PM_SP_UG_2_5;
+    data.pm10Cf  = pmsData.PM_SP_UG_10_0;
     data.success = true;
     return data;
 }
 
 // Read CO2, temperature and humidity from SCD41 via the Sensirion library
 Scd41Data readScd41() {
-    Scd41Data data = {0, 0, 0, false};
+    Scd41Data data = {};
 
     bool isDataReady = false;
     if (scd4x.getDataReadyStatus(isDataReady) || !isDataReady) return data;
@@ -122,7 +128,7 @@ static uint16_t modbusCalcCrc(const uint8_t* data, size_t len) {
 // Read JSY-MK-194G AC power meter via Modbus RTU over Serial1
 // NOTE: Verify register addresses against your specific JSY-MK-194G datasheet/firmware version
 Jsy194gData readJsy194g() {
-    Jsy194gData data = {0, 0, 0, 0, 0, 0, false};
+    Jsy194gData data = {};
 
     // Flush any stale bytes
     while (Serial1.available()) Serial1.read();

@@ -31,7 +31,7 @@ char jsyDailyEnergyTopic[TOPIC_BUF_LEN];
 WiFiClient espClient;
 MqttClient mqttClient(espClient);
 WebServer  webServer(80);
-DHT        dht(0, 0); // Re-initialised in loadBoardConfig()
+DHT*       dht = nullptr;
 
 unsigned long lastReadingTime = 0;
 float         lastTemp        = 0.0f;
@@ -40,9 +40,9 @@ char          lastReadingTimeStr[50] = "N/A";
 char          debugBuf[256];
 char          batteryMessage[256] = "";
 
-Pms5003Data lastPmsData   = {0, 0, 0, false};
-Scd41Data   lastScd41Data = {0, 0, 0, false};
-Jsy194gData lastJsyData   = {0, 0, 0, 0, 0, 0, false};
+Pms5003Data lastPmsData   = {};
+Scd41Data   lastScd41Data = {};
+Jsy194gData lastJsyData   = {};
 
 static float dayStartEnergy = -1.0f; // -1 = not yet initialised (first boot)
 static int   lastTmYday     = -1;    // -1 = not yet initialised (first boot)
@@ -86,9 +86,9 @@ void loadBoardConfig() {
         snprintf(jsyDailyEnergyTopic,  sizeof(jsyDailyEnergyTopic),  "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_DAILY_ENERGY_TOPIC);
     }
 
-    // Re-configure DHT with correct pin from config
+    // Create DHT object now that the correct pin is known
     if (boardConfig.sensors & SENSOR_DHT) {
-        dht = DHT(boardConfig.dhtDataPin, boardConfig.dhtType);
+        dht = new DHT(boardConfig.dhtDataPin, boardConfig.dhtType);
     }
 }
 
@@ -112,7 +112,7 @@ void setup() {
             pinMode(boardConfig.dhtPowerPin, OUTPUT);
             digitalWrite(boardConfig.dhtPowerPin, HIGH); // Power on early to warm up
         }
-        dht.begin();
+        dht->begin();
     }
 
     if (boardConfig.sensors & SENSOR_PMS5003) {
@@ -159,15 +159,29 @@ void loop() {
         }
     }
 
-    checkForUpdates();
+    // OTA: check on first boot, then once per hour
+    static bool          otaChecked      = false;
+    static unsigned long lastOtaCheckMs  = 0;
+    if (!otaChecked || millis() - lastOtaCheckMs >= OTA_CHECK_INTERVAL_MS) {
+        checkForUpdates();
+        otaChecked     = true;
+        lastOtaCheckMs = millis();
+    }
+
     if (!mqttClient.connected()) {
         mqttReconnect();
+    }
+
+    // NTP: configure once — the ESP32 NTP client resyncs automatically in the background
+    static bool ntpStarted = false;
+    if (!ntpStarted) {
+        configTime(gmtOffsetSec, daylightOffsetSec, ntpServer);
+        ntpStarted = true;
     }
 
     // Get current time from NTP
     char timeBuffer[50];
     struct tm timeinfo;
-    configTime(gmtOffsetSec, daylightOffsetSec, ntpServer);
     bool timeValid = getLocalTime(&timeinfo);
     if (!timeValid) {
         strncpy(timeBuffer, "Time Error", sizeof(timeBuffer) - 1);
@@ -223,6 +237,10 @@ void loop() {
             mqttSendFloat(pm1Topic,  pms.pm1);
             mqttSendFloat(pm25Topic, pms.pm25);
             mqttSendFloat(pm10Topic, pms.pm10);
+            snprintf(debugBuf, sizeof(debugBuf),
+                     "%s | PM1: %.0f | PM2.5: %.0f | PM10: %.0f | CF1 PM1: %.0f | CF1 PM2.5: %.0f | CF1 PM10: %.0f",
+                     timeBuffer, pms.pm1, pms.pm25, pms.pm10, pms.pm1Cf, pms.pm25Cf, pms.pm10Cf);
+            debugMessage(debugBuf, false);
         }
     }
 
@@ -243,6 +261,9 @@ void loop() {
                 mqttSendFloat(temperatureTopic, scd.temperature);
                 mqttSendFloat(humidityTopic,    scd.humidity);
             }
+            snprintf(debugBuf, sizeof(debugBuf), "%s | CO2: %.0f ppm | T: %.1f | H: %.0f",
+                     timeBuffer, scd.co2, scd.temperature, scd.humidity);
+            debugMessage(debugBuf, false);
         }
     }
 
@@ -261,16 +282,21 @@ void loop() {
             mqttSendFloat(jsyEnergyTopic,  jsy.energy);
 
             // Daily kWh delta — only published when NTP time is valid
+            float dailyKwh = 0.0f;
             if (timeValid) {
                 int todayYday = timeinfo.tm_yday;
                 if (lastTmYday == -1 || todayYday != lastTmYday) {
                     dayStartEnergy = jsy.energy;
                     lastTmYday     = todayYday;
                 }
-                float dailyKwh = jsy.energy - dayStartEnergy;
+                dailyKwh = jsy.energy - dayStartEnergy;
                 if (dailyKwh < 0.0f) dailyKwh = 0.0f; // guard against meter reset/rollover
                 mqttSendFloat(jsyDailyEnergyTopic, dailyKwh);
             }
+            snprintf(debugBuf, sizeof(debugBuf),
+                     "%s | V: %.1fV | I: %.2fA | P: %.1fW | PF: %.2f | F: %.1fHz | E: %.3fkWh | Day: %.3fkWh",
+                     timeBuffer, jsy.voltage, jsy.current, jsy.power, jsy.powerFactor, jsy.frequency, jsy.energy, dailyKwh);
+            debugMessage(debugBuf, false);
         }
     }
 

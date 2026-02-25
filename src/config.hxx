@@ -1,4 +1,5 @@
-// Update with WiFI and MQTT definitions, save as config.h
+// Template file — copy to config.h and fill in your credentials and board details.
+// Board configurations are defined in config.cpp (copy config.cxx as a starting point).
 #ifndef ESP32_CONFIG_H
 #define ESP32_CONFIG_H
 
@@ -23,26 +24,54 @@ static const char* const MQTT_CO2_TOPIC     = "/co2/set";
 static const char* const MQTT_PM1_TOPIC     = "/pm1/set";
 static const char* const MQTT_PM25_TOPIC    = "/pm25/set";
 static const char* const MQTT_PM10_TOPIC    = "/pm10/set";
-static const char* const MQTT_JSY_VOLTAGE_TOPIC  = "/ac-voltage/set";
-static const char* const MQTT_JSY_CURRENT_TOPIC  = "/ac-current/set";
-static const char* const MQTT_JSY_POWER_TOPIC    = "/ac-power/set";
-static const char* const MQTT_JSY_PF_TOPIC       = "/ac-pf/set";
-static const char* const MQTT_JSY_FREQ_TOPIC     = "/ac-freq/set";
-static const char* const MQTT_JSY_ENERGY_TOPIC   = "/ac-energy/set";
+static const char* const MQTT_JSY_VOLTAGE_TOPIC       = "/ac-voltage/set";
+static const char* const MQTT_JSY_CURRENT_TOPIC       = "/ac-current/set";
+static const char* const MQTT_JSY_POWER_TOPIC         = "/ac-power/set";
+static const char* const MQTT_JSY_PF_TOPIC            = "/ac-pf/set";
+static const char* const MQTT_JSY_FREQ_TOPIC          = "/ac-freq/set";
+static const char* const MQTT_JSY_ENERGY_TOPIC        = "/ac-energy/set";
+static const char* const MQTT_JSY_DAILY_ENERGY_TOPIC  = "/ac-energy-daily/set";
 
 // OTA Update server details
 static const char* const OTA_HOST = "YOUR_SERVER_IP_OR_DOMAIN";
 static constexpr int OTA_PORT = 443;
 static const char* const OTA_BIN_PATH = "/sensor/firmware.bin";
 static const char* const OTA_VERSION_PATH = "/sensor/version.txt";
+static constexpr unsigned long OTA_CHECK_INTERVAL_MS = 300000UL;  // Re-check OTA every 5 minutes (mains boards)
 
 // Other constants
 static constexpr int WIFI_RETRIES = 5;               // Number of times to retry WiFi before a restart
 static constexpr int MQTT_RETRIES = 5;               // Number of times to retry MQTT before a restart
 static constexpr int DHT_RETRIES = 5;                // Number of times to retry DHT reads before giving up
+static constexpr int DHT_INITIAL_DELAY_MS = 1000;   // Guard delay before first DHT read (ms)
+static constexpr int DHT_RETRY_DELAY_MS = 2000;     // Delay between DHT retries — DHT22 needs >=2 s between reads
 static constexpr int VOLT_READS = 10;                // Number of times to read the voltage for averaging
 static constexpr float RAW_VOLTS_CONVERSION = 620.5; // Mapping raw input back to voltage 4095 / 3.3 * voltage divider factor (2)
 static constexpr int WEB_SERVER_POLL_INTERVAL_MS = 100; // Interval in ms to poll the web server for OTA updates
+
+// Battery ADC
+static constexpr int   ADC_BIT_WIDTH          = 12;      // 12-bit ADC resolution
+static constexpr int   ADC_SETTLE_DELAY_MS    = 10;      // Settle time between ADC reads (ms)
+static constexpr float VOLT_SMOOTH_NEW        = 0.7f;    // Exponential smoothing weight for new reading
+static constexpr float VOLT_SMOOTH_PREV       = 0.3f;    // Exponential smoothing weight for previous reading
+
+// SCD41
+static constexpr int   SCD41_DEFAULT_SDA_PIN  = 21;      // ESP32 default I2C SDA pin
+static constexpr int   SCD41_DEFAULT_SCL_PIN  = 22;      // ESP32 default I2C SCL pin
+static constexpr int   SCD41_INIT_DELAY_MS    = 500;     // Delay after stopPeriodicMeasurement before start (ms)
+
+// PMS5003
+static constexpr int   PMS5003_READ_TIMEOUT_MS = 2000;   // Timeout waiting for a PMS5003 frame (ms)
+
+// JSY-MK-194G Modbus
+static constexpr int   JSY_RESPONSE_TIMEOUT_MS = 300;    // Timeout waiting for Modbus response (ms)
+static constexpr int   JSY_RESPONSE_BYTES      = 21;     // Expected Modbus response frame length
+static constexpr float JSY_VOLTAGE_SCALE       = 100.0f; // Raw register → V   (reg × 0.01)
+static constexpr float JSY_CURRENT_SCALE       = 100.0f; // Raw register → A   (reg × 0.01)
+static constexpr float JSY_POWER_SCALE         = 10.0f;  // Raw register → W   (reg × 0.1)
+static constexpr float JSY_PF_SCALE            = 1000.0f;// Raw register → PF  (reg × 0.001)
+static constexpr float JSY_FREQ_SCALE          = 100.0f; // Raw register → Hz  (reg × 0.01)
+static constexpr float JSY_ENERGY_SCALE        = 1000.0f;// Raw Wh → kWh
 
 static const char* const FIRMWARE_VERSION = "1.0.0";
 
@@ -85,81 +114,7 @@ struct BoardConfig {
     int jsyDePin;     // JSY-MK-194G RS485 DE/RE direction pin (-1 if unused)
 };
 
-// Array of board configurations
-const BoardConfig boardConfigs[] = {
-    // Example: mains-powered board with DHT only
-    {
-        "00:00:00:00:00:00", // MAC address
-        "lounge",            // Room name (used in MQTT topic)
-        "Lounge",            // Display name (shown in web UI)
-        false,               // Battery powered
-        23,                  // DHT data pin
-        DHT22,               // DHT type (DHT11 or DHT22)
-        0,                   // DHT power pin (0 = not used)
-        2,                   // LED pin
-        0,                   // Battery ADC pin (0 = not used)
-        30,                  // Time to sleep / poll interval (seconds)
-        SENSOR_DHT,          // Sensors present
-        -1, -1, -1,          // PMS5003 pins (unused)
-        -1, -1,              // SCD41 I2C pins (unused)
-        -1, -1, -1           // JSY-MK-194G pins (unused)
-    },
-    // Example: battery-powered board with DHT only
-    {
-        "11:11:11:11:11:11",
-        "garden",
-        "Garden",
-        true,
-        23,
-        DHT22,
-        18,                  // DHT power pin (used to cut power between reads)
-        2,
-        35,                  // Battery ADC pin
-        600,
-        SENSOR_DHT,
-        -1, -1, -1,
-        -1, -1,
-        -1, -1, -1
-    },
-    // Example: mains-powered board with DHT + JSY-MK-194G power meter
-    // JSY wired to Serial1: RX=16, TX=17, RS485 DE/RE=4
-    {
-        "22:22:22:22:22:22",
-        "utility",
-        "Utility Room",
-        false,
-        23,
-        DHT22,
-        0,
-        2,
-        0,
-        30,
-        SENSOR_DHT | SENSOR_JSY194G,
-        -1, -1, -1,          // PMS5003 pins (unused)
-        -1, -1,              // SCD41 I2C pins (unused)
-        16, 17, 4            // JSY-MK-194G: RX, TX, DE/RE pin
-    },
-    // Add more board configurations here...
-};
-
-// Function to get board configuration based on MAC address
-inline BoardConfig getBoardConfig(const char* mac) {
-    for (const auto& config : boardConfigs) {
-        if (strcmp(mac, config.macAddress) == 0) {
-            Serial.println("Found matching config for MAC: " + String(mac) + " for room: " + String(config.roomName));
-            return config;
-        }
-    }
-
-    Serial.println("No matching config found. Using default.");
-    return {
-        "00:00:00:00:00:00", "default", "Default",
-        false, 4, DHT22, 0, 0, 0, 30,
-        SENSOR_DHT,
-        -1, -1, -1,
-        -1, -1,
-        -1, -1, -1
-    };
-}
+// Board configurations are defined in config.cpp (copy config.cxx and add your boards there)
+BoardConfig getBoardConfig(const char* mac);
 
 #endif // ESP32_CONFIG_H

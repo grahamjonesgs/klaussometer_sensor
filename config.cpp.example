@@ -1,0 +1,106 @@
+// Template file — copy to config.cpp and add your board entries.
+#include "config.h"
+#include <Arduino.h>
+
+static const BoardConfig boardConfigs[] = {
+    // Example: mains-powered board with DHT only
+    {
+        "00:00:00:00:00:00", // MAC address
+        "lounge",            // Room name (used in MQTT topic)
+        "Lounge",            // Display name (shown in web UI)
+        false,               // Battery powered
+        23,                  // DHT data pin
+        DHT22,               // DHT type (DHT11 or DHT22)
+        0,                   // DHT power pin (0 = not used)
+        2,                   // LED pin
+        0,                   // Battery ADC pin (0 = not used)
+        30,                  // Poll interval (seconds)
+        SENSOR_DHT,          // Sensors present
+        -1, -1, -1,          // PMS5003 pins (unused)
+        -1, -1,              // SCD41 I2C pins (unused)
+        -1, -1, -1           // JSY-MK-194G pins (unused)
+    },
+    // Example: battery-powered board with DHT only
+    {
+        "11:11:11:11:11:11",
+        "garden",
+        "Garden",
+        true,                // Battery powered
+        23,                  // DHT data pin
+        DHT22,
+        18,                  // DHT power pin (cuts power between reads to save battery)
+        2,
+        35,                  // Battery ADC pin
+        600,                 // Deep sleep interval (seconds)
+        SENSOR_DHT,
+        -1, -1, -1,
+        -1, -1,
+        -1, -1, -1
+    },
+    // Example: mains-powered board with DHT + PMS5003 air quality sensor
+    // PMS5003 wired to Serial2: RX=16, power pin=4
+    {
+        "22:22:22:22:22:22",
+        "office",
+        "Office",
+        false,
+        23,
+        DHT22,
+        0,
+        2,
+        0,
+        30,
+        SENSOR_DHT | SENSOR_PMS5003,
+        16, -1, 4,           // PMS5003: RX, TX (-1 = unused), power pin
+        -1, -1,              // SCD41 I2C pins (unused)
+        -1, -1, -1           // JSY-MK-194G pins (unused)
+    },
+    // Example: mains-powered board with DHT + JSY-MK-194G power meter
+    // JSY wired to Serial1: RX=16, TX=17, RS485 DE/RE=4
+    {
+        "33:33:33:33:33:33",
+        "utility",
+        "Utility Room",
+        false,
+        23,
+        DHT22,
+        0,
+        2,
+        0,
+        30,
+        SENSOR_DHT | SENSOR_JSY194G,
+        -1, -1, -1,          // PMS5003 pins (unused)
+        -1, -1,              // SCD41 I2C pins (unused)
+        16, 17, 4            // JSY-MK-194G: RX, TX, DE/RE pin
+    },
+    // Add more board configurations here...
+};
+
+BoardConfig getBoardConfig(const char* mac) {
+    for (const auto& config : boardConfigs) {
+        if (strcmp(mac, config.macAddress) == 0) {
+            char buf[80];
+            snprintf(buf, sizeof(buf), "Found matching config for MAC: %s for room: %s", mac, config.roomName);
+            Serial.println(buf);
+            return config;
+        }
+    }
+
+    Serial.println("No matching config found. Using default.");
+    return {
+        "00:00:00:00:00:00",
+        "default",
+        "Default",
+        false,
+        23,
+        DHT22,
+        0,
+        2,
+        0,
+        30,
+        SENSOR_DHT | SENSOR_PMS5003,
+        16, -1, 4,
+        -1, -1,
+        -1, -1, -1
+    };
+}
