@@ -44,13 +44,11 @@ Pms5003Data lastPmsData   = {};
 Scd41Data   lastScd41Data = {};
 Jsy194gData lastJsyData   = {};
 
-static float dayStartEnergy = -1.0f; // -1 = not yet initialised (first boot)
+static double dayStartEnergy = -1.0; // -1 = not yet initialised (first boot)
 static int   lastTmYday     = -1;    // -1 = not yet initialised (first boot)
 
 // NTP settings (used only in loop)
-static const char* const ntpServer        = "pool.ntp.org";
-static constexpr long    gmtOffsetSec     = 7200;
-static constexpr int     daylightOffsetSec = 0;
+static const char* const ntpServer = "pool.ntp.org";
 
 // ---------------------------------------------------------------------------
 
@@ -159,7 +157,7 @@ void loop() {
         }
     }
 
-    // OTA: check on first boot, then once per hour
+    // OTA: check on first boot, then every 5 minutes
     static bool          otaChecked      = false;
     static unsigned long lastOtaCheckMs  = 0;
     if (!otaChecked || millis() - lastOtaCheckMs >= OTA_CHECK_INTERVAL_MS) {
@@ -175,7 +173,7 @@ void loop() {
     // NTP: configure once — the ESP32 NTP client resyncs automatically in the background
     static bool ntpStarted = false;
     if (!ntpStarted) {
-        configTime(gmtOffsetSec, daylightOffsetSec, ntpServer);
+        configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, ntpServer);
         ntpStarted = true;
     }
 
@@ -187,6 +185,12 @@ void loop() {
         strncpy(timeBuffer, "Time Error", sizeof(timeBuffer) - 1);
     } else {
         strftime(timeBuffer, sizeof(timeBuffer) - 1, "%d/%m/%y %H:%M:%S", &timeinfo);
+    }
+
+    // Stamp start of this cycle so the next wait interval is measured from here,
+    // not from after sensor reads complete (avoids cumulative drift).
+    if (!boardConfig.isBatteryPowered) {
+        lastReadingTime = millis();
     }
 
     // Read DHT sensor if present
@@ -303,7 +307,5 @@ void loop() {
     if (boardConfig.isBatteryPowered) {
         delay(1000); // Allow messages to transmit before sleeping
         deepSleep(boardConfig.timeToSleep);
-    } else {
-        lastReadingTime = millis();
     }
 }

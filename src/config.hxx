@@ -39,6 +39,10 @@ static const char* const OTA_BIN_PATH = "/sensor/firmware.bin";
 static const char* const OTA_VERSION_PATH = "/sensor/version.txt";
 static constexpr unsigned long OTA_CHECK_INTERVAL_MS = 300000UL;  // Re-check OTA every 5 minutes (mains boards)
 
+// NTP time zone settings
+static constexpr long GMT_OFFSET_SEC      = 7200; // UTC+2 (adjust for your time zone)
+static constexpr int  DAYLIGHT_OFFSET_SEC = 0;    // Additional DST offset (0 if DST not in use)
+
 // Other constants
 static constexpr int WIFI_RETRIES = 5;               // Number of times to retry WiFi before a restart
 static constexpr int MQTT_RETRIES = 5;               // Number of times to retry MQTT before a restart
@@ -96,22 +100,21 @@ struct BoardConfig {
     const char* macAddress;
     const char* roomName;
     const char* displayName;
-    bool isBatteryPowered;
-    int dhtDataPin;
-    int dhtType;
-    int dhtPowerPin;
-    int ledPin;
-    int battPin;
-    int timeToSleep;  // in seconds
-    SensorType sensors; // bitmask of SensorType flags
-    int pmsRxPin;     // PMS5003 UART RX pin  (-1 if unused)
-    int pmsTxPin;     // PMS5003 UART TX pin  (-1 if unused)
-    int pmsPowerPin;  // PMS5003 power pin    (-1 if unused)
-    int i2cSdaPin;    // SCD41 I2C SDA pin    (-1 = ESP32 default pin 21)
-    int i2cSclPin;    // SCD41 I2C SCL pin    (-1 = ESP32 default pin 22)
-    int jsyRxPin;     // JSY-MK-194G UART RX  (-1 if unused)
-    int jsyTxPin;     // JSY-MK-194G UART TX  (-1 if unused)
-    int jsyDePin;     // JSY-MK-194G RS485 DE/RE direction pin (-1 if unused)
+    bool     isBatteryPowered;
+    int8_t   dhtDataPin;
+    uint8_t  dhtType;
+    int8_t   dhtPowerPin;
+    int8_t   battPin;
+    uint16_t timeToSleep;   // in seconds
+    SensorType sensors;     // bitmask of SensorType flags
+    int8_t   pmsRxPin;      // PMS5003 UART RX pin  (-1 if unused)
+    int8_t   pmsTxPin;      // PMS5003 UART TX pin  (-1 if unused)
+    int8_t   pmsPowerPin;   // PMS5003 power pin    (-1 if unused)
+    int8_t   i2cSdaPin;     // SCD41 I2C SDA pin    (-1 = ESP32 default pin 21)
+    int8_t   i2cSclPin;     // SCD41 I2C SCL pin    (-1 = ESP32 default pin 22)
+    int8_t   jsyRxPin;      // JSY-MK-194G UART RX  (-1 if unused)
+    int8_t   jsyTxPin;      // JSY-MK-194G UART TX  (-1 if unused)
+    int8_t   jsyDePin;      // JSY-MK-194G RS485 DE/RE direction pin (-1 if unused)
 };
 
 // Board configurations are defined in config.cpp (copy config.cxx and add your boards there)

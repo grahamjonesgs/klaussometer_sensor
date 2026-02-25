@@ -21,9 +21,10 @@ struct Pms5003Data { float pm1; float pm25; float pm10;
                      bool success; };
 struct Scd41Data   { float co2; float temperature; float humidity; bool success; };
 struct Jsy194gData {
-    float voltage; float current; float power;
-    float powerFactor; float frequency; float energy;
-    bool success;
+    float  voltage; float current; float power;
+    float  powerFactor; float frequency;
+    double energy; // double for cumulative kWh precision
+    bool   success;
 };
 
 // RTC Memory (persists across deep sleep)

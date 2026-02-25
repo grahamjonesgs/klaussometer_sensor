@@ -1,6 +1,7 @@
 #include "sensors.h"
 #include <PMS.h>
 #include <SensirionI2cScd4x.h>
+#include <esp_task_wdt.h>
 
 // File-scope sensor objects (Serial2 / Wire initialised by setup() before first use)
 static PMS               pms(Serial2);
@@ -24,6 +25,7 @@ SensorData readDhtSensor() {
             break;
         }
         delay(DHT_RETRY_DELAY_MS); // DHT22 requires >=2 s between reads
+        esp_task_wdt_reset();      // keep watchdog alive during extended retry wait
     }
 
     if (boardConfig.isBatteryPowered) {
@@ -196,7 +198,7 @@ Jsy194gData readJsy194g() {
     data.power       = rawPower   / JSY_POWER_SCALE;
     data.powerFactor = rawPf      / JSY_PF_SCALE;
     data.frequency   = rawFreq    / JSY_FREQ_SCALE;
-    data.energy      = rawEnergy  / JSY_ENERGY_SCALE;
+    data.energy      = (double)rawEnergy / 1000.0; // explicit double division for kWh precision
     data.success     = true;
     return data;
 }
