@@ -48,6 +48,7 @@ extern char jsyPowerTopic[TOPIC_BUF_LEN];
 extern char jsyPfTopic[TOPIC_BUF_LEN];
 extern char jsyFreqTopic[TOPIC_BUF_LEN];
 extern char jsyEnergyTopic[TOPIC_BUF_LEN];
+extern char jsyDailyEnergyTopic[TOPIC_BUF_LEN];
 
 // Network objects
 extern WiFiClient espClient;

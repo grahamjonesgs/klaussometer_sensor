@@ -26,6 +26,7 @@ char jsyPowerTopic[TOPIC_BUF_LEN];
 char jsyPfTopic[TOPIC_BUF_LEN];
 char jsyFreqTopic[TOPIC_BUF_LEN];
 char jsyEnergyTopic[TOPIC_BUF_LEN];
+char jsyDailyEnergyTopic[TOPIC_BUF_LEN];
 
 WiFiClient espClient;
 MqttClient mqttClient(espClient);
@@ -42,6 +43,9 @@ char          batteryMessage[256] = "";
 Pms5003Data lastPmsData   = {0, 0, 0, false};
 Scd41Data   lastScd41Data = {0, 0, 0, false};
 Jsy194gData lastJsyData   = {0, 0, 0, 0, 0, 0, false};
+
+static float dayStartEnergy = -1.0f; // -1 = not yet initialised (first boot)
+static int   lastTmYday     = -1;    // -1 = not yet initialised (first boot)
 
 // NTP settings (used only in loop)
 static const char* const ntpServer        = "pool.ntp.org";
@@ -78,7 +82,8 @@ void loadBoardConfig() {
         snprintf(jsyPowerTopic,   sizeof(jsyPowerTopic),   "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_POWER_TOPIC);
         snprintf(jsyPfTopic,      sizeof(jsyPfTopic),      "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_PF_TOPIC);
         snprintf(jsyFreqTopic,    sizeof(jsyFreqTopic),    "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_FREQ_TOPIC);
-        snprintf(jsyEnergyTopic,  sizeof(jsyEnergyTopic),  "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_ENERGY_TOPIC);
+        snprintf(jsyEnergyTopic,       sizeof(jsyEnergyTopic),       "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_ENERGY_TOPIC);
+        snprintf(jsyDailyEnergyTopic,  sizeof(jsyDailyEnergyTopic),  "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_DAILY_ENERGY_TOPIC);
     }
 
     // Re-configure DHT with correct pin from config
@@ -163,7 +168,8 @@ void loop() {
     char timeBuffer[50];
     struct tm timeinfo;
     configTime(gmtOffsetSec, daylightOffsetSec, ntpServer);
-    if (!getLocalTime(&timeinfo)) {
+    bool timeValid = getLocalTime(&timeinfo);
+    if (!timeValid) {
         strncpy(timeBuffer, "Time Error", sizeof(timeBuffer) - 1);
     } else {
         strftime(timeBuffer, sizeof(timeBuffer) - 1, "%d/%m/%y %H:%M:%S", &timeinfo);
@@ -253,6 +259,18 @@ void loop() {
             mqttSendFloat(jsyPfTopic,      jsy.powerFactor);
             mqttSendFloat(jsyFreqTopic,    jsy.frequency);
             mqttSendFloat(jsyEnergyTopic,  jsy.energy);
+
+            // Daily kWh delta — only published when NTP time is valid
+            if (timeValid) {
+                int todayYday = timeinfo.tm_yday;
+                if (lastTmYday == -1 || todayYday != lastTmYday) {
+                    dayStartEnergy = jsy.energy;
+                    lastTmYday     = todayYday;
+                }
+                float dailyKwh = jsy.energy - dayStartEnergy;
+                if (dailyKwh < 0.0f) dailyKwh = 0.0f; // guard against meter reset/rollover
+                mqttSendFloat(jsyDailyEnergyTopic, dailyKwh);
+            }
         }
     }
 
