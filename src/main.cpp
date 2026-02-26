@@ -44,8 +44,11 @@ Pms5003Data lastPmsData   = {};
 Scd41Data   lastScd41Data = {};
 Jsy194gData lastJsyData   = {};
 
-static double dayStartEnergy = -1.0; // -1 = not yet initialised (first boot)
-static int   lastTmYday     = -1;    // -1 = not yet initialised (first boot)
+static double        dayStartEnergy = -1.0; // -1 = not yet initialised (first boot)
+static int           lastTmYday     = -1;   // -1 = not yet initialised (first boot)
+// Sentinel: first PMS read fires after PMS5003_WARMUP_MS (not a full interval) from boot
+static unsigned long lastPmsReadMs  = 0UL - (PMS5003_READ_INTERVAL_MS - PMS5003_WARMUP_MS);
+static bool          pmsPoweredOn   = true; // true on boot (sensor starts powered)
 
 // NTP settings (used only in loop)
 static const char* const ntpServer = "pool.ntp.org";
@@ -146,6 +149,15 @@ void loop() {
     if (!boardConfig.isBatteryPowered && lastReadingTime > 0) {
         unsigned long nextReadingTime = lastReadingTime + (boardConfig.timeToSleep * 1000UL);
         while ((long)(millis() - nextReadingTime) < 0) {
+            // Power on PMS5003 early so laser stabilizes before its scheduled read
+            if ((boardConfig.sensors & SENSOR_PMS5003) && boardConfig.pmsPowerPin >= 0) {
+                unsigned long nextPmsRead = lastPmsReadMs + PMS5003_READ_INTERVAL_MS;
+                unsigned long pmsOnAt     = nextPmsRead   - PMS5003_WARMUP_MS;
+                if ((long)(millis() - pmsOnAt) >= 0 && !pmsPoweredOn) {
+                    digitalWrite(boardConfig.pmsPowerPin, HIGH);
+                    pmsPoweredOn = true;
+                }
+            }
             webServer.handleClient();
             delay(WEB_SERVER_POLL_INTERVAL_MS);
         }
@@ -235,9 +247,11 @@ void loop() {
         debugMessage(mqttMessage, true);
     }
 
-    // Read PMS5003 air quality sensor if present
-    if (boardConfig.sensors & SENSOR_PMS5003) {
+    // Read PMS5003 on its own 5-minute cycle to preserve laser lifespan
+    if ((boardConfig.sensors & SENSOR_PMS5003) &&
+            (millis() - lastPmsReadMs >= PMS5003_READ_INTERVAL_MS)) {
         Pms5003Data pms = readPms5003();
+        lastPmsReadMs = millis(); // reset interval regardless of success/fail
         if (!pms.success) {
             debugMessage("PMS5003 read failed.", false);
         } else {
@@ -249,6 +263,11 @@ void loop() {
                      "%s | PM1: %.0f | PM2.5: %.0f | PM10: %.0f | CF1 PM1: %.0f | CF1 PM2.5: %.0f | CF1 PM10: %.0f",
                      timeBuffer, pms.pm1, pms.pm25, pms.pm10, pms.pm1Cf, pms.pm25Cf, pms.pm10Cf);
             debugMessage(debugBuf, false);
+        }
+        // Power off after read to preserve laser lifespan
+        if (boardConfig.pmsPowerPin >= 0 && !boardConfig.isBatteryPowered) {
+            digitalWrite(boardConfig.pmsPowerPin, LOW);
+            pmsPoweredOn = false;
         }
     }
 

@@ -66,7 +66,9 @@ static constexpr int   SCD41_INIT_DELAY_MS    = 500;     // Delay after stopPeri
 static constexpr int   SCD41_REINIT_DELAY_MS  = 20;      // Delay after reinit() before next command (ms)
 
 // PMS5003
-static constexpr int   PMS5003_READ_TIMEOUT_MS = 2000;   // Timeout waiting for a PMS5003 frame (ms)
+static constexpr int           PMS5003_READ_TIMEOUT_MS  = 2000;    // Timeout waiting for a PMS5003 frame (ms)
+static constexpr unsigned long PMS5003_READ_INTERVAL_MS = 120000UL; // PMS read cycle (ms); independent of main loop
+static constexpr unsigned long PMS5003_WARMUP_MS        =  30000UL; // Warm-up after power-on before stable readings (ms)
 
 // JSY-MK-194G Modbus
 static constexpr int   JSY_RESPONSE_TIMEOUT_MS = 300;    // Timeout waiting for Modbus response (ms)
