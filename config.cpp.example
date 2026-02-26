@@ -11,7 +11,8 @@ static const BoardConfig boardConfigs[] = {
         false,               // Battery powered
         23,                  // DHT data pin
         DHT22,               // DHT type (DHT11 or DHT22)
-        0,                   // DHT power pin (0 = not used)
+        0,                   // DHT power pin (0 = use 3.3V rail)
+        0,                   // DHT GND pin (0 = use board GND pin)
         0,                   // Battery ADC pin (0 = not used)
         30,                  // Poll interval (seconds)
         SENSOR_DHT,          // Sensors present
@@ -28,6 +29,7 @@ static const BoardConfig boardConfigs[] = {
         23,                  // DHT data pin
         DHT22,
         18,                  // DHT power pin (cuts power between reads to save battery)
+        0,                   // DHT GND pin
         35,                  // Battery ADC pin
         600,                 // Deep sleep interval (seconds)
         SENSOR_DHT,
@@ -44,7 +46,8 @@ static const BoardConfig boardConfigs[] = {
         false,
         23,
         DHT22,
-        0,
+        0,                   // DHT power pin
+        0,                   // DHT GND pin
         0,
         30,
         SENSOR_DHT | SENSOR_PMS5003,
@@ -61,7 +64,8 @@ static const BoardConfig boardConfigs[] = {
         false,
         23,
         DHT22,
-        0,
+        0,                   // DHT power pin
+        0,                   // DHT GND pin
         0,
         30,
         SENSOR_DHT | SENSOR_JSY194G,
@@ -90,7 +94,8 @@ BoardConfig getBoardConfig(const char* mac) {
         false,
         23,
         DHT22,
-        0,
+        0,                   // DHT power pin
+        0,                   // DHT GND pin
         0,
         30,
         SENSOR_DHT | SENSOR_PMS5003,

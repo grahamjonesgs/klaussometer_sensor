@@ -62,7 +62,8 @@ static constexpr float VOLT_SMOOTH_PREV       = 0.3f;    // Exponential smoothin
 // SCD41
 static constexpr int   SCD41_DEFAULT_SDA_PIN  = 21;      // ESP32 default I2C SDA pin
 static constexpr int   SCD41_DEFAULT_SCL_PIN  = 22;      // ESP32 default I2C SCL pin
-static constexpr int   SCD41_INIT_DELAY_MS    = 500;     // Delay after stopPeriodicMeasurement before start (ms)
+static constexpr int   SCD41_INIT_DELAY_MS    = 500;     // Delay after stopPeriodicMeasurement (ms) — datasheet min 500
+static constexpr int   SCD41_REINIT_DELAY_MS  = 20;      // Delay after reinit() before next command (ms)
 
 // PMS5003
 static constexpr int   PMS5003_READ_TIMEOUT_MS = 2000;   // Timeout waiting for a PMS5003 frame (ms)
@@ -104,6 +105,7 @@ struct BoardConfig {
     int8_t   dhtDataPin;
     uint8_t  dhtType;
     int8_t   dhtPowerPin;
+    int8_t   dhtGndPin;     // GPIO driven LOW as DHT GND (saves a GND pin); 0 = not used
     int8_t   battPin;
     uint16_t timeToSleep;   // in seconds
     SensorType sensors;     // bitmask of SensorType flags

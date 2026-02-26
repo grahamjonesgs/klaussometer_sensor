@@ -106,7 +106,11 @@ void setup() {
     loadBoardConfig();
 
     if (boardConfig.sensors & SENSOR_DHT) {
-        if (boardConfig.isBatteryPowered && boardConfig.dhtPowerPin > 0) {
+        if (boardConfig.dhtGndPin > 0) {
+            pinMode(boardConfig.dhtGndPin, OUTPUT);
+            digitalWrite(boardConfig.dhtGndPin, LOW);    // GPIO as GND substitute
+        }
+        if (boardConfig.dhtPowerPin > 0) {
             pinMode(boardConfig.dhtPowerPin, OUTPUT);
             digitalWrite(boardConfig.dhtPowerPin, HIGH); // Power on early to warm up
         }

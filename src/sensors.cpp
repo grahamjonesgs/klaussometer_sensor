@@ -71,8 +71,10 @@ void initScd41(int sdaPin, int sclPin) {
     Wire.begin(sdaPin >= 0 ? sdaPin : SCD41_DEFAULT_SDA_PIN,
                sclPin >= 0 ? sclPin : SCD41_DEFAULT_SCL_PIN);
     scd4x.begin(Wire, SCD41_I2C_ADDR);
-    scd4x.stopPeriodicMeasurement(); // safe no-op on first boot
-    delay(SCD41_INIT_DELAY_MS);
+    scd4x.stopPeriodicMeasurement(); // stop if already running; safe no-op on first boot
+    delay(SCD41_INIT_DELAY_MS);      // must wait >= 500 ms before any other command
+    scd4x.reinit();                  // restore factory settings; recovers sensor from bad state
+    delay(SCD41_REINIT_DELAY_MS);
     scd4x.startPeriodicMeasurement();
 }
 
