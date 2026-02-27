@@ -80,6 +80,16 @@ static constexpr float JSY_PF_SCALE            = 1000.0f;// Raw register → PF 
 static constexpr float JSY_FREQ_SCALE          = 100.0f; // Raw register → Hz  (reg × 0.01)
 static constexpr float JSY_ENERGY_SCALE        = 1000.0f;// Raw Wh → kWh
 
+// ESP-NOW
+// Read the gateway board's MAC from its serial output on first boot:
+//   "Board MAC Address: XX:XX:XX:XX:XX:XX"
+// Enter the 6 bytes below in order.
+static const uint8_t  ESPNOW_GATEWAY_MAC[6]    = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+static constexpr uint32_t ESPNOW_SEND_TIMEOUT_MS = 2000; // Max ms to wait for delivery ACK
+static constexpr int   ESPNOW_OTA_BOOT_INTERVAL = 6;     // Connect WiFi for OTA every N boots (~1h at 10-min sleep)
+// WiFi channel is discovered automatically on first boot and cached in RTC memory.
+// No manual channel configuration is required.
+
 static const char* const FIRMWARE_VERSION = "1.0.0";
 
 // Global debug flags (can be overridden per board)
@@ -119,6 +129,9 @@ struct BoardConfig {
     int8_t   jsyRxPin;      // JSY-MK-194G UART RX  (-1 if unused)
     int8_t   jsyTxPin;      // JSY-MK-194G UART TX  (-1 if unused)
     int8_t   jsyDePin;      // JSY-MK-194G RS485 DE/RE direction pin (-1 if unused)
+    // ESP-NOW
+    bool     isEspNowGateway; // true = receive ESP-NOW packets from battery nodes and forward to MQTT
+    bool     useEspNow;       // true = transmit sensor data via ESP-NOW instead of direct WiFi+MQTT
 };
 
 // Board configurations are defined in config.cpp (copy config.cxx and add your boards there)

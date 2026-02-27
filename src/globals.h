@@ -28,9 +28,10 @@ struct Jsy194gData {
 };
 
 // RTC Memory (persists across deep sleep)
-extern RTC_DATA_ATTR int   bootCount;
-extern RTC_DATA_ATTR int   successCount;
-extern RTC_DATA_ATTR float lastVolts;
+extern RTC_DATA_ATTR int     bootCount;
+extern RTC_DATA_ATTR int     successCount;
+extern RTC_DATA_ATTR float   lastVolts;
+extern RTC_DATA_ATTR uint8_t rtcWifiChannel; // ESP-NOW: cached WiFi channel; 0 = not yet discovered
 
 // Board config and identification
 extern BoardConfig boardConfig;

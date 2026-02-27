@@ -1,13 +1,15 @@
 #include "globals.h"
+#include "espnow.h"
 #include "network.h"
 #include "ota.h"
 #include "sensors.h"
 #include <WiFi.h>
 
 // Global definitions (extern-declared in globals.h)
-RTC_DATA_ATTR int   bootCount    = 0;
-RTC_DATA_ATTR int   successCount = 0;
-RTC_DATA_ATTR float lastVolts    = 0.0f;
+RTC_DATA_ATTR int     bootCount      = 0;
+RTC_DATA_ATTR int     successCount   = 0;
+RTC_DATA_ATTR float   lastVolts      = 0.0f;
+RTC_DATA_ATTR uint8_t rtcWifiChannel = 0;   // ESP-NOW WiFi channel; 0 = not yet discovered
 
 BoardConfig boardConfig;
 char macAddress[18];
@@ -108,6 +110,18 @@ void setup() {
     Serial.begin(115200);
     loadBoardConfig();
 
+    // Validate configuration — warn about combinations that cannot work correctly
+    if (boardConfig.isBatteryPowered && (boardConfig.sensors & SENSOR_PMS5003)) {
+        Serial.println("CONFIG WARNING: PMS5003 is not supported on battery-powered boards. "
+                       "The sensor requires a 30-second warm-up that is incompatible with deep sleep. "
+                       "Remove SENSOR_PMS5003 from this board's config.");
+    }
+    if (boardConfig.isBatteryPowered && (boardConfig.sensors & SENSOR_JSY194G)) {
+        Serial.println("CONFIG WARNING: JSY-MK-194G is not supported on battery-powered boards. "
+                       "Modbus RTU over UART is incompatible with deep sleep wake cycles. "
+                       "Remove SENSOR_JSY194G from this board's config.");
+    }
+
     if (boardConfig.sensors & SENSOR_DHT) {
         if (boardConfig.dhtGndPin > 0) {
             pinMode(boardConfig.dhtGndPin, OUTPUT);
@@ -144,11 +158,67 @@ void setup() {
 }
 
 void loop() {
+    // ── ESP-NOW sender path (battery boards using ESP-NOW) ──────────────────
+    // Reads sensors, transmits via ESP-NOW, optionally checks OTA, then sleeps.
+    // This path never connects to WiFi for sensor data, saving ~95% of battery.
+    if (boardConfig.isBatteryPowered && boardConfig.useEspNow) {
+        EspNowPayload payload = {};
+        strncpy(payload.roomName, boardConfig.roomName, sizeof(payload.roomName) - 1);
+        payload.temperature  = NAN;
+        payload.humidity     = NAN;
+        payload.batteryVolts = 0.0f;
+        payload.bootCount    = (uint16_t)bootCount;
+        payload.successCount = (uint16_t)successCount;
+
+        if (boardConfig.sensors & SENSOR_DHT) {
+            SensorData reading = readDhtSensor();
+            if (reading.success) {
+                payload.temperature = reading.temperature;
+                payload.humidity    = reading.humidity;
+                successCount++;
+                payload.successCount = (uint16_t)successCount;
+            }
+        }
+
+        if (boardConfig.battPin > 0) {
+            payload.batteryVolts = readBatteryVoltage();
+        }
+
+        // Connect to WiFi when channel is unknown (first ever boot) or it is
+        // time for an OTA check. Both cases read the current channel from the
+        // AP association and cache it in RTC memory so subsequent boots skip WiFi.
+        bool needsWifi = (rtcWifiChannel == 0) || (bootCount % ESPNOW_OTA_BOOT_INTERVAL == 0);
+        if (needsWifi) {
+            if (setupWifi()) {
+                uint8_t ch = (uint8_t)WiFi.channel();
+                if (ch > 0) {
+                    rtcWifiChannel = ch;
+                    Serial.printf("ESP-NOW: WiFi channel cached: %u\n", ch);
+                }
+                if (bootCount % ESPNOW_OTA_BOOT_INTERVAL == 0) {
+                    checkForUpdates();
+                }
+            }
+            WiFi.disconnect(true); // true = also disable WiFi radio
+        }
+
+        if (rtcWifiChannel > 0) {
+            espNowSend(payload, rtcWifiChannel);
+        } else {
+            Serial.println("ESP-NOW: channel not yet known — skipping send this boot");
+        }
+
+        deepSleep(boardConfig.timeToSleep);
+        return; // deepSleep() does not return; this line is for clarity
+    }
+
+    // ── Normal path (mains boards and WiFi-connected battery boards) ─────────
     // For mains-powered devices, wait until the next reading time.
     // Skip the wait on the very first run (lastReadingTime == 0).
     if (!boardConfig.isBatteryPowered && lastReadingTime > 0) {
         unsigned long nextReadingTime = lastReadingTime + (boardConfig.timeToSleep * 1000UL);
         while ((long)(millis() - nextReadingTime) < 0) {
+            if (boardConfig.isEspNowGateway) handleEspNowReceived();
             // Power on PMS5003 early so laser stabilizes before its scheduled read
             if ((boardConfig.sensors & SENSOR_PMS5003) && boardConfig.pmsPowerPin >= 0) {
                 unsigned long nextPmsRead = lastPmsReadMs + PMS5003_READ_INTERVAL_MS;
@@ -186,6 +256,15 @@ void loop() {
         mqttReconnect();
     }
 
+    // ESP-NOW gateway: initialise once after MQTT is up
+    if (boardConfig.isEspNowGateway) {
+        static bool espNowReady = false;
+        if (!espNowReady) {
+            initEspNowGateway();
+            espNowReady = true;
+        }
+    }
+
     // NTP: configure once — the ESP32 NTP client resyncs automatically in the background
     static bool ntpStarted = false;
     if (!ntpStarted) {
@@ -217,18 +296,20 @@ void loop() {
             debugMessage(debugBuf, true);
             if (boardConfig.isBatteryPowered) {
                 deepSleep(boardConfig.timeToSleep);
-            } else {
-                lastReadingTime = millis();
-                return;
+            }
+            // On mains boards: log and continue — other sensors (SCD41 etc.) are still read
+        } else {
+            successCount++;
+            lastTemp  = reading.temperature;
+            lastHumid = reading.humidity;
+            strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
+            lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
+            // Only publish DHT temp/humidity if SCD41 is absent; SCD41 is more accurate
+            if (!(boardConfig.sensors & SENSOR_SCD41)) {
+                mqttSendFloat(temperatureTopic, reading.temperature);
+                mqttSendFloat(humidityTopic,    reading.humidity);
             }
         }
-        successCount++;
-        lastTemp  = reading.temperature;
-        lastHumid = reading.humidity;
-        strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
-        lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
-        mqttSendFloat(temperatureTopic, reading.temperature);
-        mqttSendFloat(humidityTopic,    reading.humidity);
     }
 
     // Read and publish battery voltage
@@ -279,15 +360,13 @@ void loop() {
         } else {
             lastScd41Data = scd;
             mqttSendFloat(co2Topic, scd.co2);
-            // If no DHT present, use SCD41 temperature and humidity
-            if (!(boardConfig.sensors & SENSOR_DHT)) {
-                lastTemp  = scd.temperature;
-                lastHumid = scd.humidity;
-                strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
-                lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
-                mqttSendFloat(temperatureTopic, scd.temperature);
-                mqttSendFloat(humidityTopic,    scd.humidity);
-            }
+            // SCD41 is preferred for temperature and humidity; also used as fallback if no DHT
+            lastTemp  = scd.temperature;
+            lastHumid = scd.humidity;
+            strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
+            lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
+            mqttSendFloat(temperatureTopic, scd.temperature);
+            mqttSendFloat(humidityTopic,    scd.humidity);
             snprintf(debugBuf, sizeof(debugBuf), "%s | CO2: %.0f ppm | T: %.1f | H: %.0f",
                      timeBuffer, scd.co2, scd.temperature, scd.humidity);
             debugMessage(debugBuf, false);
@@ -326,6 +405,9 @@ void loop() {
             debugMessage(debugBuf, false);
         }
     }
+
+    // Process any ESP-NOW packets that arrived during this cycle's sensor reads
+    if (boardConfig.isEspNowGateway) handleEspNowReceived();
 
     if (boardConfig.isBatteryPowered) {
         delay(1000); // Allow messages to transmit before sleeping
