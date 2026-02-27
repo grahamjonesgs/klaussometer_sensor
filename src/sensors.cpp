@@ -91,9 +91,9 @@ Pms5003Data readPms5003() {
     data.pm1     = pmsData.PM_AE_UG_1_0;
     data.pm25    = pmsData.PM_AE_UG_2_5;
     data.pm10    = pmsData.PM_AE_UG_10_0;
-    data.pm1Cf   = pmsData.PM_SP_UG_1_0;
-    data.pm25Cf  = pmsData.PM_SP_UG_2_5;
-    data.pm10Cf  = pmsData.PM_SP_UG_10_0;
+    data.pm1Std  = pmsData.PM_SP_UG_1_0;
+    data.pm25Std = pmsData.PM_SP_UG_2_5;
+    data.pm10Std = pmsData.PM_SP_UG_10_0;
     data.success = true;
     return data;
 }

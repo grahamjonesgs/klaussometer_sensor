@@ -342,7 +342,7 @@ void loop() {
             mqttSendFloat(pm10Topic, pms.pm10);
             snprintf(debugBuf, sizeof(debugBuf),
                      "%s | PM1: %.0f | PM2.5: %.0f | PM10: %.0f | CF1 PM1: %.0f | CF1 PM2.5: %.0f | CF1 PM10: %.0f",
-                     timeBuffer, pms.pm1, pms.pm25, pms.pm10, pms.pm1Cf, pms.pm25Cf, pms.pm10Cf);
+                     timeBuffer, pms.pm1, pms.pm25, pms.pm10, pms.pm1Std, pms.pm25Std, pms.pm10Std);
             debugMessage(debugBuf, false);
         }
         // Power off after read to preserve laser lifespan

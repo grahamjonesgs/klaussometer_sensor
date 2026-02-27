@@ -17,7 +17,7 @@ static constexpr size_t   TOPIC_BUF_LEN           = 80;
 // Sensor data structs
 struct SensorData  { float temperature; float humidity; bool success; };
 struct Pms5003Data { float pm1; float pm25; float pm10;
-                     float pm1Cf; float pm25Cf; float pm10Cf; // CF=1 standard particle values
+                     float pm1Std; float pm25Std; float pm10Std; // Standard particle (CF=1, PM_SP_UG) values
                      bool success; };
 struct Scd41Data   { float co2; float temperature; float humidity; bool success; };
 struct Jsy194gData {

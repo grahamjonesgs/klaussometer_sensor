@@ -1,5 +1,5 @@
 // Template file — copy to config.h and fill in your credentials and board details.
-// Board configurations are defined in config.cpp (copy config.cxx as a starting point).
+// Board configurations are defined in config.cpp (copy config.cpp.example as a starting point).
 #ifndef ESP32_CONFIG_H
 #define ESP32_CONFIG_H
 
