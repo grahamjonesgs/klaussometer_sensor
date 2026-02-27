@@ -296,20 +296,19 @@ void loop() {
             debugMessage(debugBuf, true);
             if (boardConfig.isBatteryPowered) {
                 deepSleep(boardConfig.timeToSleep);
-            } else {
-                lastReadingTime = millis();
-                return;
             }
-        }
-        successCount++;
-        lastTemp  = reading.temperature;
-        lastHumid = reading.humidity;
-        strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
-        lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
-        // Only publish DHT temp/humidity if SCD41 is absent; SCD41 is more accurate
-        if (!(boardConfig.sensors & SENSOR_SCD41)) {
-            mqttSendFloat(temperatureTopic, reading.temperature);
-            mqttSendFloat(humidityTopic,    reading.humidity);
+            // On mains boards: log and continue — other sensors (SCD41 etc.) are still read
+        } else {
+            successCount++;
+            lastTemp  = reading.temperature;
+            lastHumid = reading.humidity;
+            strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
+            lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
+            // Only publish DHT temp/humidity if SCD41 is absent; SCD41 is more accurate
+            if (!(boardConfig.sensors & SENSOR_SCD41)) {
+                mqttSendFloat(temperatureTopic, reading.temperature);
+                mqttSendFloat(humidityTopic,    reading.humidity);
+            }
         }
     }
 
