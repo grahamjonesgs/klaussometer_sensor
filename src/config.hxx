@@ -119,6 +119,8 @@ struct BoardConfig {
     int8_t   jsyRxPin;      // JSY-MK-194G UART RX  (-1 if unused)
     int8_t   jsyTxPin;      // JSY-MK-194G UART TX  (-1 if unused)
     int8_t   jsyDePin;      // JSY-MK-194G RS485 DE/RE direction pin (-1 if unused)
+    // ESP-NOW
+    bool     isEspNowGateway; // true = receive ESP-NOW packets from battery nodes and forward to MQTT
 };
 
 // Board configurations are defined in config.cpp (copy config.cxx and add your boards there)

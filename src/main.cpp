@@ -108,6 +108,18 @@ void setup() {
     Serial.begin(115200);
     loadBoardConfig();
 
+    // Validate configuration — warn about combinations that cannot work correctly
+    if (boardConfig.isBatteryPowered && (boardConfig.sensors & SENSOR_PMS5003)) {
+        Serial.println("CONFIG WARNING: PMS5003 is not supported on battery-powered boards. "
+                       "The sensor requires a 30-second warm-up that is incompatible with deep sleep. "
+                       "Remove SENSOR_PMS5003 from this board's config.");
+    }
+    if (boardConfig.isBatteryPowered && (boardConfig.sensors & SENSOR_JSY194G)) {
+        Serial.println("CONFIG WARNING: JSY-MK-194G is not supported on battery-powered boards. "
+                       "Modbus RTU over UART is incompatible with deep sleep wake cycles. "
+                       "Remove SENSOR_JSY194G from this board's config.");
+    }
+
     if (boardConfig.sensors & SENSOR_DHT) {
         if (boardConfig.dhtGndPin > 0) {
             pinMode(boardConfig.dhtGndPin, OUTPUT);
@@ -227,8 +239,11 @@ void loop() {
         lastHumid = reading.humidity;
         strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
         lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
-        mqttSendFloat(temperatureTopic, reading.temperature);
-        mqttSendFloat(humidityTopic,    reading.humidity);
+        // Only publish DHT temp/humidity if SCD41 is absent; SCD41 is more accurate
+        if (!(boardConfig.sensors & SENSOR_SCD41)) {
+            mqttSendFloat(temperatureTopic, reading.temperature);
+            mqttSendFloat(humidityTopic,    reading.humidity);
+        }
     }
 
     // Read and publish battery voltage
@@ -279,15 +294,13 @@ void loop() {
         } else {
             lastScd41Data = scd;
             mqttSendFloat(co2Topic, scd.co2);
-            // If no DHT present, use SCD41 temperature and humidity
-            if (!(boardConfig.sensors & SENSOR_DHT)) {
-                lastTemp  = scd.temperature;
-                lastHumid = scd.humidity;
-                strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
-                lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
-                mqttSendFloat(temperatureTopic, scd.temperature);
-                mqttSendFloat(humidityTopic,    scd.humidity);
-            }
+            // SCD41 is preferred for temperature and humidity; also used as fallback if no DHT
+            lastTemp  = scd.temperature;
+            lastHumid = scd.humidity;
+            strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
+            lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
+            mqttSendFloat(temperatureTopic, scd.temperature);
+            mqttSendFloat(humidityTopic,    scd.humidity);
             snprintf(debugBuf, sizeof(debugBuf), "%s | CO2: %.0f ppm | T: %.1f | H: %.0f",
                      timeBuffer, scd.co2, scd.temperature, scd.humidity);
             debugMessage(debugBuf, false);
