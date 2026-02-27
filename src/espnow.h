@@ -22,9 +22,11 @@ void initEspNowGateway();
 void handleEspNowReceived();
 
 // ── Battery node (sender) ─────────────────────────────────────────────────
-// Configures WiFi to the fixed ESP-NOW channel, sends the payload to
+// Configures WiFi to the given channel, sends the payload to
 // ESPNOW_GATEWAY_MAC, and blocks until an ACK arrives or
 // ESPNOW_SEND_TIMEOUT_MS elapses. Cleans up esp_now on return.
-void espNowSend(const EspNowPayload& payload);
+// channel: WiFi channel discovered by the caller via WiFi.channel() after
+//          a successful connection; cached in RTC memory across deep sleeps.
+void espNowSend(const EspNowPayload& payload, uint8_t channel);
 
 #endif // ESPNOW_H

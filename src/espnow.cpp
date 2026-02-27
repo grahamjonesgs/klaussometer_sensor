@@ -77,13 +77,13 @@ static void onDataSent(const uint8_t* mac, esp_now_send_status_t status) {
     espNowSendDone = true;
 }
 
-void espNowSend(const EspNowPayload& payload) {
+void espNowSend(const EspNowPayload& payload, uint8_t channel) {
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     delay(100);
 
     // Set the channel to match the gateway's WiFi connection
-    esp_wifi_set_channel(ESPNOW_WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
 
     if (esp_now_init() != ESP_OK) {
         Serial.println("ESP-NOW: sender init failed");
@@ -93,7 +93,7 @@ void espNowSend(const EspNowPayload& payload) {
 
     esp_now_peer_info_t peer = {};
     memcpy(peer.peer_addr, ESPNOW_GATEWAY_MAC, 6);
-    peer.channel = ESPNOW_WIFI_CHANNEL;
+    peer.channel = channel;
     peer.encrypt = false;
     esp_now_add_peer(&peer);
 
