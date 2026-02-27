@@ -1,4 +1,5 @@
 #include "globals.h"
+#include "espnow.h"
 #include "network.h"
 #include "ota.h"
 #include "sensors.h"
@@ -156,11 +157,53 @@ void setup() {
 }
 
 void loop() {
+    // ── ESP-NOW sender path (battery boards using ESP-NOW) ──────────────────
+    // Reads sensors, transmits via ESP-NOW, optionally checks OTA, then sleeps.
+    // This path never connects to WiFi for sensor data, saving ~95% of battery.
+    if (boardConfig.isBatteryPowered && boardConfig.useEspNow) {
+        EspNowPayload payload = {};
+        strncpy(payload.roomName, boardConfig.roomName, sizeof(payload.roomName) - 1);
+        payload.temperature  = NAN;
+        payload.humidity     = NAN;
+        payload.batteryVolts = 0.0f;
+        payload.bootCount    = (uint16_t)bootCount;
+        payload.successCount = (uint16_t)successCount;
+
+        if (boardConfig.sensors & SENSOR_DHT) {
+            SensorData reading = readDhtSensor();
+            if (reading.success) {
+                payload.temperature = reading.temperature;
+                payload.humidity    = reading.humidity;
+                successCount++;
+                payload.successCount = (uint16_t)successCount;
+            }
+        }
+
+        if (boardConfig.battPin > 0) {
+            payload.batteryVolts = readBatteryVoltage();
+        }
+
+        espNowSend(payload);
+
+        // Periodically connect to WiFi to check for OTA firmware updates
+        if (bootCount % ESPNOW_OTA_BOOT_INTERVAL == 0) {
+            if (setupWifi()) {
+                checkForUpdates();
+            }
+            WiFi.disconnect(true); // true = also disable WiFi radio
+        }
+
+        deepSleep(boardConfig.timeToSleep);
+        return; // deepSleep() does not return; this line is for clarity
+    }
+
+    // ── Normal path (mains boards and WiFi-connected battery boards) ─────────
     // For mains-powered devices, wait until the next reading time.
     // Skip the wait on the very first run (lastReadingTime == 0).
     if (!boardConfig.isBatteryPowered && lastReadingTime > 0) {
         unsigned long nextReadingTime = lastReadingTime + (boardConfig.timeToSleep * 1000UL);
         while ((long)(millis() - nextReadingTime) < 0) {
+            if (boardConfig.isEspNowGateway) handleEspNowReceived();
             // Power on PMS5003 early so laser stabilizes before its scheduled read
             if ((boardConfig.sensors & SENSOR_PMS5003) && boardConfig.pmsPowerPin >= 0) {
                 unsigned long nextPmsRead = lastPmsReadMs + PMS5003_READ_INTERVAL_MS;
@@ -196,6 +239,15 @@ void loop() {
 
     if (!mqttClient.connected()) {
         mqttReconnect();
+    }
+
+    // ESP-NOW gateway: initialise once after MQTT is up
+    if (boardConfig.isEspNowGateway) {
+        static bool espNowReady = false;
+        if (!espNowReady) {
+            initEspNowGateway();
+            espNowReady = true;
+        }
     }
 
     // NTP: configure once — the ESP32 NTP client resyncs automatically in the background
@@ -339,6 +391,9 @@ void loop() {
             debugMessage(debugBuf, false);
         }
     }
+
+    // Process any ESP-NOW packets that arrived during this cycle's sensor reads
+    if (boardConfig.isEspNowGateway) handleEspNowReceived();
 
     if (boardConfig.isBatteryPowered) {
         delay(1000); // Allow messages to transmit before sleeping
