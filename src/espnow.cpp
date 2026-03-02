@@ -6,6 +6,7 @@
 #include <WiFi.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 // ── Gateway receiver ──────────────────────────────────────────────────────
 
@@ -53,8 +54,22 @@ void handleEspNowReceived() {
     }
 
     // Debug message published to the remote node's own debug topic
+    // Add a timestamp (local time) so the retained debug message shows when
+    // the packet was received by the gateway.
+    char tsBuf[32];
+    time_t now = time(nullptr);
+    if (now != (time_t)0) {
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
+        strftime(tsBuf, sizeof(tsBuf), "%d/%m/%y %H:%M:%S", &timeinfo);
+    } else {
+        strncpy(tsBuf, "Time N/A", sizeof(tsBuf));
+        tsBuf[sizeof(tsBuf) - 1] = '\0';
+    }
+
     snprintf(debugBuf, sizeof(debugBuf),
-             "V%s | ESP-NOW [%s] T:%.1f H:%.0f%% Bat:%.2fV Boot:%u Success:%u",
+             "%s | V%s | ESP-NOW [%s] T:%.1f H:%.0f%% Bat:%.2fV Boot:%u Success:%u",
+             tsBuf,
              FIRMWARE_VERSION,
              pkt.roomName, pkt.temperature, pkt.humidity,
              pkt.batteryVolts, pkt.bootCount, pkt.successCount);
