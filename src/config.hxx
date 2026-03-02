@@ -47,7 +47,7 @@ static constexpr int  DAYLIGHT_OFFSET_SEC = 0;    // Additional DST offset (0 if
 static constexpr int WIFI_RETRIES = 5;               // Number of times to retry WiFi before a restart
 static constexpr int MQTT_RETRIES = 5;               // Number of times to retry MQTT before a restart
 static constexpr int DHT_RETRIES = 5;                // Number of times to retry DHT reads before giving up
-static constexpr int DHT_INITIAL_DELAY_MS = 1000;   // Guard delay before first DHT read (ms)
+static constexpr int DHT_INITIAL_DELAY_MS = 2000;   // Guard delay before first DHT read (ms) — DHT22 minimum is 1 s; 2 s gives outdoor margin
 static constexpr int DHT_RETRY_DELAY_MS = 2000;     // Delay between DHT retries — DHT22 needs >=2 s between reads
 static constexpr int VOLT_READS = 10;                // Number of times to read the voltage for averaging
 static constexpr float RAW_VOLTS_CONVERSION = 620.5; // Mapping raw input back to voltage 4095 / 3.3 * voltage divider factor (2)
