@@ -27,6 +27,7 @@ void handleEspNowReceived();
 // ESPNOW_SEND_TIMEOUT_MS elapses. Cleans up esp_now on return.
 // channel: WiFi channel discovered by the caller via WiFi.channel() after
 //          a successful connection; cached in RTC memory across deep sleeps.
-void espNowSend(const EspNowPayload& payload, uint8_t channel);
+// Returns true if at least one send attempt received an ACK from the gateway.
+bool espNowSend(const EspNowPayload& payload, uint8_t channel);
 
 #endif // ESPNOW_H

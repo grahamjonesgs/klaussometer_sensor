@@ -170,6 +170,7 @@ void loop() {
         payload.bootCount    = (uint16_t)bootCount;
         payload.successCount = (uint16_t)successCount;
 
+        bool dhtOk = true;
         if (boardConfig.sensors & SENSOR_DHT) {
             SensorData reading = readDhtSensor();
             if (reading.success) {
@@ -177,6 +178,8 @@ void loop() {
                 payload.humidity    = reading.humidity;
                 successCount++;
                 payload.successCount = (uint16_t)successCount;
+            } else {
+                dhtOk = false;
             }
         }
 
@@ -202,13 +205,16 @@ void loop() {
             WiFi.disconnect(true); // true = also disable WiFi radio
         }
 
+        bool espNowOk = true; // not a failure if channel not yet known (first boot)
         if (rtcWifiChannel > 0) {
-            espNowSend(payload, rtcWifiChannel);
+            espNowOk = espNowSend(payload, rtcWifiChannel);
         } else {
             Serial.println("ESP-NOW: channel not yet known — skipping send this boot");
         }
 
-        deepSleep(boardConfig.timeToSleep);
+        // Retry sooner if DHT read or ESP-NOW send failed; otherwise normal interval
+        int sleepSecs = (dhtOk && espNowOk) ? boardConfig.timeToSleep : ESPNOW_RETRY_SLEEP_S;
+        deepSleep(sleepSecs);
         return; // deepSleep() does not return; this line is for clarity
     }
 

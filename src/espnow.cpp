@@ -92,7 +92,7 @@ static void onDataSent(const uint8_t* mac, esp_now_send_status_t status) {
     espNowSendDone = true;
 }
 
-void espNowSend(const EspNowPayload& payload, uint8_t channel) {
+bool espNowSend(const EspNowPayload& payload, uint8_t channel) {
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     delay(100);
@@ -102,7 +102,7 @@ void espNowSend(const EspNowPayload& payload, uint8_t channel) {
 
     if (esp_now_init() != ESP_OK) {
         Serial.println("ESP-NOW: sender init failed");
-        return;
+        return false;
     }
     esp_now_register_send_cb(onDataSent);
 
@@ -112,21 +112,25 @@ void espNowSend(const EspNowPayload& payload, uint8_t channel) {
     peer.encrypt = false;
     esp_now_add_peer(&peer);
 
-    espNowSendDone = false;
-    espNowSendOk   = false;
-    esp_now_send(ESPNOW_GATEWAY_MAC, (const uint8_t*)&payload, sizeof(payload));
+    for (int attempt = 1; attempt <= 2; attempt++) {
+        espNowSendDone = false;
+        espNowSendOk   = false;
+        esp_now_send(ESPNOW_GATEWAY_MAC, (const uint8_t*)&payload, sizeof(payload));
 
-    // Block until ACK or timeout
-    uint32_t deadline = millis() + ESPNOW_SEND_TIMEOUT_MS;
-    while (!espNowSendDone && (long)(millis() - deadline) < 0) {
-        delay(1);
-    }
+        // Block until ACK or timeout
+        uint32_t deadline = millis() + ESPNOW_SEND_TIMEOUT_MS;
+        while (!espNowSendDone && (long)(millis() - deadline) < 0) {
+            delay(1);
+        }
 
-    if (espNowSendOk) {
-        Serial.println("ESP-NOW: send OK");
-    } else {
-        Serial.println("ESP-NOW: send failed or timed out");
+        if (espNowSendOk) {
+            Serial.printf("ESP-NOW: send OK (attempt %d)\n", attempt);
+            break;
+        }
+        Serial.printf("ESP-NOW: send failed (attempt %d)\n", attempt);
+        if (attempt < 2) delay(200); // brief pause before retry
     }
 
     esp_now_deinit();
+    return espNowSendOk;
 }

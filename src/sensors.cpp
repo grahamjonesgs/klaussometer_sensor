@@ -40,9 +40,8 @@ float readBatteryVoltage() {
         return 0.0;
     }
 
-    // Configure ADC for better accuracy
+    // Configure ADC for better accuracy (12-bit width is the default, no need to set it)
     analogSetAttenuation(ADC_11db);         // 0-3.6V range
-    analogSetWidth(ADC_BIT_WIDTH);
 
     // Discard first reading (often inaccurate)
     analogRead(boardConfig.battPin);

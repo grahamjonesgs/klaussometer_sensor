@@ -85,8 +85,9 @@ static constexpr float JSY_ENERGY_SCALE        = 1000.0f;// Raw Wh → kWh
 //   "Board MAC Address: XX:XX:XX:XX:XX:XX"
 // Enter the 6 bytes below in order.
 static const uint8_t  ESPNOW_GATEWAY_MAC[6]    = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static constexpr uint32_t ESPNOW_SEND_TIMEOUT_MS = 2000; // Max ms to wait for delivery ACK
-static constexpr int   ESPNOW_OTA_BOOT_INTERVAL = 6;     // Connect WiFi for OTA every N boots (~1h at 10-min sleep)
+static constexpr uint32_t ESPNOW_SEND_TIMEOUT_MS  = 2000; // Max ms to wait for delivery ACK
+static constexpr int   ESPNOW_OTA_BOOT_INTERVAL  = 6;    // Connect WiFi for OTA every N boots (~1h at 10-min sleep)
+static constexpr int   ESPNOW_RETRY_SLEEP_S      = 60;   // Short sleep after a failed DHT read or ESP-NOW send (s)
 // WiFi channel is discovered automatically on first boot and cached in RTC memory.
 // No manual channel configuration is required.
 
