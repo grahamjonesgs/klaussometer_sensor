@@ -1,5 +1,6 @@
 #include "globals.h"
 #include "espnow.h"
+#include "ir_ac.h"
 #include "network.h"
 #include "ota.h"
 #include "sensors.h"
@@ -29,6 +30,8 @@ char jsyPfTopic[TOPIC_BUF_LEN];
 char jsyFreqTopic[TOPIC_BUF_LEN];
 char jsyEnergyTopic[TOPIC_BUF_LEN];
 char jsyDailyEnergyTopic[TOPIC_BUF_LEN];
+char acCommandTopic[TOPIC_BUF_LEN];
+char tvCommandTopic[TOPIC_BUF_LEN];
 
 WiFiClient espClient;
 MqttClient mqttClient(espClient);
@@ -79,6 +82,11 @@ void loadBoardConfig() {
         snprintf(pm25Topic, sizeof(pm25Topic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_PM25_TOPIC);
         snprintf(pm10Topic, sizeof(pm10Topic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_PM10_TOPIC);
     }
+    if (boardConfig.sensors & SENSOR_IR_AC) {
+        snprintf(acCommandTopic, sizeof(acCommandTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_IR_AC_TOPIC);
+        snprintf(tvCommandTopic, sizeof(tvCommandTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_IR_TV_TOPIC);
+    }
+
     if (boardConfig.sensors & SENSOR_JSY194G) {
         snprintf(jsyVoltageTopic, sizeof(jsyVoltageTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_VOLTAGE_TOPIC);
         snprintf(jsyCurrentTopic, sizeof(jsyCurrentTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_JSY_CURRENT_TOPIC);
@@ -154,7 +162,62 @@ void setup() {
         }
     }
 
+    if (boardConfig.sensors & SENSOR_IR_AC) {
+        initIrAc(boardConfig.irTxPin);
+    }
+
     mqttClient.setUsernamePassword(MQTT_USER, MQTT_PASSWORD);
+
+    // Set MQTT message callback once — fires whenever a subscribed message arrives
+    if (boardConfig.sensors & SENSOR_IR_AC) {
+        mqttClient.onMessage([](int /*messageSize*/) {
+            static const char* const modeNames[] = { "cool", "heat", "auto", "fan", "dry" };
+            static const char* const fanNames[]  = { "auto", "low",  "med",  "high", "turbo" };
+
+            // Read topic and payload
+            String topic = mqttClient.messageTopic();
+            char payload[128] = {};
+            int i = 0;
+            while (mqttClient.available() && i < (int)sizeof(payload) - 1) {
+                payload[i++] = (char)mqttClient.read();
+            }
+
+            snprintf(debugBuf, sizeof(debugBuf), "IR: received on %s: \"%s\"",
+                     topic.c_str(), payload);
+            debugMessage(debugBuf, false);
+
+            // ── TV power ─────────────────────────────────────────────────────
+            if (topic == tvCommandTopic) {
+                bool on = (strncmp(payload, "on", 2) == 0);
+                sendSamsungTvPower(on);
+                snprintf(debugBuf, sizeof(debugBuf), "IR TV: power %s", on ? "ON" : "OFF");
+                debugMessage(debugBuf, false);
+                return;
+            }
+
+            // ── AC command ───────────────────────────────────────────────────
+            if (topic == acCommandTopic) {
+                // Persistent AC state — updated incrementally by each message
+                static bool    acPower = false;
+                static uint8_t acTemp  = 24;
+                static AcMode  acMode  = AC_MODE_COOL;
+                static AcFan   acFan   = AC_FAN_AUTO;
+
+                if (parseSamsungAcPayload(payload, acPower, acTemp, acMode, acFan)) {
+                    sendSamsungAcCommand(acPower, acTemp, acMode, acFan);
+                    snprintf(debugBuf, sizeof(debugBuf),
+                             "IR AC: sending - power=%s temp=%u C mode=%s fan=%s",
+                             acPower ? "on" : "off", acTemp,
+                             modeNames[acMode], fanNames[acFan]);
+                    debugMessage(debugBuf, false);
+                } else {
+                    snprintf(debugBuf, sizeof(debugBuf),
+                             "IR AC: payload not parsed — no valid fields in \"%s\"", payload);
+                    debugMessage(debugBuf, false);
+                }
+            }
+        });
+    }
 }
 
 void loop() {
@@ -224,6 +287,7 @@ void loop() {
     if (!boardConfig.isBatteryPowered && lastReadingTime > 0) {
         unsigned long nextReadingTime = lastReadingTime + (boardConfig.timeToSleep * 1000UL);
         while ((long)(millis() - nextReadingTime) < 0) {
+            mqttClient.poll(); // process incoming subscribed messages (e.g. IR AC commands)
             if (boardConfig.isEspNowGateway) handleEspNowReceived();
             // Power on PMS5003 early so laser stabilizes before its scheduled read
             if ((boardConfig.sensors & SENSOR_PMS5003) && boardConfig.pmsPowerPin >= 0) {
@@ -260,6 +324,11 @@ void loop() {
 
     if (!mqttClient.connected()) {
         mqttReconnect();
+        // Re-subscribe after every (re)connect — subscriptions are lost on disconnect
+        if (boardConfig.sensors & SENSOR_IR_AC) {
+            mqttClient.subscribe(acCommandTopic);
+            mqttClient.subscribe(tvCommandTopic);
+        }
     }
 
     // ESP-NOW gateway: initialise once after MQTT is up

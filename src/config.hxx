@@ -31,6 +31,8 @@ static const char* const MQTT_JSY_PF_TOPIC            = "/ac-pf/set";
 static const char* const MQTT_JSY_FREQ_TOPIC          = "/ac-freq/set";
 static const char* const MQTT_JSY_ENERGY_TOPIC        = "/ac-energy/set";
 static const char* const MQTT_JSY_DAILY_ENERGY_TOPIC  = "/ac-energy-daily/set";
+static const char* const MQTT_IR_AC_TOPIC             = "/ir-ac/set"; // subscribe: receive AC commands
+static const char* const MQTT_IR_TV_TOPIC             = "/ir-tv/set"; // subscribe: receive TV commands
 
 // OTA Update server details
 static const char* const OTA_HOST = "YOUR_SERVER_IP_OR_DOMAIN";
@@ -103,6 +105,7 @@ enum SensorType : uint32_t {
     SENSOR_PMS5003 = (1 << 1), // Particulate matter (PM1.0, PM2.5, PM10) via UART
     SENSOR_SCD41   = (1 << 2), // CO2 + temperature + humidity via I2C
     SENSOR_JSY194G = (1 << 3), // JSY-MK-194G AC power meter via Modbus RTU/UART
+    SENSOR_IR_AC   = (1 << 4), // IR transmitter — sends commands to Samsung AC unit
 };
 
 // Allow combining SensorType flags with | in board config initialisers
@@ -130,6 +133,8 @@ struct BoardConfig {
     int8_t   jsyRxPin;      // JSY-MK-194G UART RX  (-1 if unused)
     int8_t   jsyTxPin;      // JSY-MK-194G UART TX  (-1 if unused)
     int8_t   jsyDePin;      // JSY-MK-194G RS485 DE/RE direction pin (-1 if unused)
+    // IR AC transmitter
+    int8_t   irTxPin;         // GPIO connected to the IR LED (-1 if unused)
     // ESP-NOW
     bool     isEspNowGateway; // true = receive ESP-NOW packets from battery nodes and forward to MQTT
     bool     useEspNow;       // true = transmit sensor data via ESP-NOW instead of direct WiFi+MQTT
