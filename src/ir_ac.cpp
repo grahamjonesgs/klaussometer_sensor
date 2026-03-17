@@ -1,4 +1,5 @@
 #include "ir_ac.h"
+#include "config.h"
 #include <Arduino.h>
 #include <IRremoteESP8266.h>
 // Note: do NOT #include <IRSend.h> with angle brackets — that can resolve to a
@@ -64,7 +65,7 @@ void sendSamsungAcCommand(bool power, uint8_t temp, AcMode mode, AcFan fan) {
     acSender->setTemp(clampedTemp);
     acSender->setMode(modeMap[mode]);
     acSender->setFan(fanMap[fan]);
-    acSender->send();
+    acSender->send(IR_AC_REPEAT);
     Serial.println("IR AC: signal transmitted OK");
 }
 
