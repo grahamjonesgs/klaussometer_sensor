@@ -112,7 +112,7 @@ bool espNowSend(const EspNowPayload& payload, uint8_t channel) {
     peer.encrypt = false;
     esp_now_add_peer(&peer);
 
-    for (int attempt = 1; attempt <= 2; attempt++) {
+    for (int attempt = 1; attempt <= 3; attempt++) {
         espNowSendDone = false;
         espNowSendOk   = false;
         esp_now_send(ESPNOW_GATEWAY_MAC, (const uint8_t*)&payload, sizeof(payload));
@@ -128,7 +128,7 @@ bool espNowSend(const EspNowPayload& payload, uint8_t channel) {
             break;
         }
         Serial.printf("ESP-NOW: send failed (attempt %d)\n", attempt);
-        if (attempt < 2) delay(200); // brief pause before retry
+        if (attempt < 3) delay(200); // brief pause before retry
     }
 
     esp_now_deinit();

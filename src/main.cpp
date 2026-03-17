@@ -388,11 +388,16 @@ void loop() {
     }
 
     // Read and publish battery voltage
+    // Skip if voltage rose since last reading — indicates board is charging/plugged in.
     batteryMessage[0] = '\0';
     if (boardConfig.isBatteryPowered && boardConfig.battPin > 0) {
+        float prevVolts = lastVolts;  // RTC value from previous wake (0 on first boot)
         lastVolts = readBatteryVoltage();
-        snprintf(batteryMessage, sizeof(batteryMessage), " | Bat: %.2fV", lastVolts);
-        mqttSendFloat(batteryTopic, lastVolts);
+        bool likelyCharging = (prevVolts > 0.0f) && (lastVolts - prevVolts > BATT_RISING_DELTA_V);
+        if (!likelyCharging) {
+            snprintf(batteryMessage, sizeof(batteryMessage), " | Bat: %.2fV", lastVolts);
+            mqttSendFloat(batteryTopic, lastVolts);
+        }
     }
 
     // Send DHT summary debug message

@@ -21,8 +21,8 @@ static constexpr uint32_t SAMSUNG_TV_POWER_TOGGLE = 0xE0E040BFU;
 // Dedicated on/off codes — try these if the toggle is unreliable
 //static constexpr uint32_t SAMSUNG_TV_POWER_ON     = 0xE0E09966U;
 //static constexpr uint32_t SAMSUNG_TV_POWER_OFF    = 0xE0E019E6U;
-static constexpr uint32_t SAMSUNG_TV_POWER_ON     = 0xE0E040BFU;
-static constexpr uint32_t SAMSUNG_TV_POWER_OFF    = 0xE0E040BFU;
+static constexpr uint32_t SAMSUNG_TV_POWER_ON     = 0xE0E09966U;
+static constexpr uint32_t SAMSUNG_TV_POWER_OFF    = 0xE0E019E6U;
 
 // ---------------------------------------------------------------------------
 // Init
