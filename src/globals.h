@@ -54,7 +54,6 @@ extern char jsyFreqTopic[TOPIC_BUF_LEN];
 extern char jsyEnergyTopic[TOPIC_BUF_LEN];
 extern char jsyDailyEnergyTopic[TOPIC_BUF_LEN];
 extern char acCommandTopic[TOPIC_BUF_LEN];      // IR AC command subscribe topic
-extern char tvCommandTopic[TOPIC_BUF_LEN];      // IR TV command subscribe topic
 
 // Network objects
 extern WiFiClient espClient;

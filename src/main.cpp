@@ -31,7 +31,6 @@ char jsyFreqTopic[TOPIC_BUF_LEN];
 char jsyEnergyTopic[TOPIC_BUF_LEN];
 char jsyDailyEnergyTopic[TOPIC_BUF_LEN];
 char acCommandTopic[TOPIC_BUF_LEN];
-char tvCommandTopic[TOPIC_BUF_LEN];
 
 WiFiClient espClient;
 MqttClient mqttClient(espClient);
@@ -84,7 +83,6 @@ void loadBoardConfig() {
     }
     if (boardConfig.sensors & SENSOR_IR_AC) {
         snprintf(acCommandTopic, sizeof(acCommandTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_IR_AC_TOPIC);
-        snprintf(tvCommandTopic, sizeof(tvCommandTopic), "%s%s%s", MQTT_TOPIC_USER, boardConfig.roomName, MQTT_IR_TV_TOPIC);
     }
 
     if (boardConfig.sensors & SENSOR_JSY194G) {
@@ -185,15 +183,6 @@ void setup() {
             snprintf(debugBuf, sizeof(debugBuf), "IR: received on %s: \"%s\"",
                      topic.c_str(), payload);
             debugMessage(debugBuf, false);
-
-            // ── TV power ─────────────────────────────────────────────────────
-            if (topic == tvCommandTopic) {
-                bool on = (strncmp(payload, "on", 2) == 0);
-                sendSamsungTvPower(on);
-                snprintf(debugBuf, sizeof(debugBuf), "IR TV: power %s", on ? "ON" : "OFF");
-                debugMessage(debugBuf, false);
-                return;
-            }
 
             // ── AC command ───────────────────────────────────────────────────
             if (topic == acCommandTopic) {
@@ -327,7 +316,6 @@ void loop() {
         // Re-subscribe after every (re)connect — subscriptions are lost on disconnect
         if (boardConfig.sensors & SENSOR_IR_AC) {
             mqttClient.subscribe(acCommandTopic);
-            mqttClient.subscribe(tvCommandTopic);
         }
     }
 

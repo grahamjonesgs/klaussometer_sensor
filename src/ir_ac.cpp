@@ -14,25 +14,14 @@ static constexpr uint8_t AC_TEMP_MIN = 16;
 static constexpr uint8_t AC_TEMP_MAX = 30;
 
 static IRSamsungAc* acSender = nullptr;
-static int          irTxPin  = -1; // stored for TV sender (created per-call)
-
-// Samsung TV IR codes (32-bit Samsung protocol)
-// Power toggle — works on most Samsung TVs and the M8 M80C monitor
-static constexpr uint32_t SAMSUNG_TV_POWER_TOGGLE = 0xE0E040BFU;
-// Dedicated on/off codes — try these if the toggle is unreliable
-//static constexpr uint32_t SAMSUNG_TV_POWER_ON     = 0xE0E09966U;
-//static constexpr uint32_t SAMSUNG_TV_POWER_OFF    = 0xE0E019E6U;
-static constexpr uint32_t SAMSUNG_TV_POWER_ON     = 0xE0E09966U;
-static constexpr uint32_t SAMSUNG_TV_POWER_OFF    = 0xE0E019E6U;
 
 // ---------------------------------------------------------------------------
 // Init
 
 void initIrAc(int txPin) {
-    irTxPin  = txPin;
     acSender = new IRSamsungAc((uint16_t)txPin);
     acSender->begin();
-    Serial.printf("IR: transmitter ready on GPIO %d (AC + TV)\n", txPin);
+    Serial.printf("IR: transmitter ready on GPIO %d\n", txPin);
 }
 
 // ---------------------------------------------------------------------------
@@ -67,43 +56,6 @@ void sendSamsungAcCommand(bool power, uint8_t temp, AcMode mode, AcFan fan) {
     acSender->setFan(fanMap[fan]);
     acSender->send(IR_AC_REPEAT);
     Serial.println("IR AC: signal transmitted OK");
-}
-
-// ---------------------------------------------------------------------------
-// TV power
-// Implemented directly with ESP32 ledc rather than IRSend — IRremoteESP8266
-// uses ledc internally and reconfigures the channel at the start of every
-// send, so both paths share the same GPIO and channel without conflict.
-
-static void tvIrMark(uint8_t channel, uint32_t us) {
-    ledcWrite(channel, 64); // 25% duty — carrier on
-    delayMicroseconds(us);
-}
-
-static void tvIrSpace(uint8_t channel, uint32_t us) {
-    ledcWrite(channel, 0); // carrier off
-    if (us) delayMicroseconds(us);
-}
-
-void sendSamsungTvPower(bool on) {
-    if (irTxPin < 0) return;
-
-    const uint32_t code    = on ? SAMSUNG_TV_POWER_ON : SAMSUNG_TV_POWER_OFF;
-    const uint8_t  channel = (uint8_t)(irTxPin % 8); // matches IRremoteESP8266 channel selection
-
-    // 38kHz carrier, 8-bit resolution — same as IRremoteESP8266
-    ledcSetup(channel, 38000, 8);
-    ledcAttachPin(irTxPin, channel);
-
-    tvIrMark(channel, 4500);  tvIrSpace(channel, 4500); // Samsung header
-    for (int i = 0; i < 32; i++) {                      // 32 data bits, LSB first
-        tvIrMark(channel, 560);
-        tvIrSpace(channel, (code >> i) & 1U ? 1690 : 560);
-    }
-    tvIrMark(channel, 560);   tvIrSpace(channel, 0);    // footer mark
-
-    ledcWrite(channel, 0); // ensure LED off
-    Serial.printf("IR TV: power %s sent (code 0x%08X)\n", on ? "ON" : "OFF", code);
 }
 
 // ---------------------------------------------------------------------------
