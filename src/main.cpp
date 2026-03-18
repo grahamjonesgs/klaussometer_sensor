@@ -260,6 +260,13 @@ void loop() {
         bool espNowOk = true; // not a failure if channel not yet known (first boot)
         if (rtcWifiChannel > 0) {
             espNowOk = espNowSend(payload, rtcWifiChannel);
+            if (!espNowOk) {
+                // All retries failed — the gateway may have moved to a different
+                // WiFi channel (router reboot, DFS, etc.). Clear the cached channel
+                // so the next boot reconnects to WiFi and rediscovers it.
+                rtcWifiChannel = 0;
+                Serial.println("ESP-NOW: send failed — channel cache cleared, will rediscover next boot");
+            }
         } else {
             Serial.println("ESP-NOW: channel not yet known — skipping send this boot");
         }
