@@ -7,10 +7,11 @@
 #include <WiFi.h>
 
 // Global definitions (extern-declared in globals.h)
-RTC_DATA_ATTR int     bootCount      = 0;
-RTC_DATA_ATTR int     successCount   = 0;
-RTC_DATA_ATTR float   lastVolts      = 0.0f;
-RTC_DATA_ATTR uint8_t rtcWifiChannel = 0;   // ESP-NOW WiFi channel; 0 = not yet discovered
+RTC_DATA_ATTR int      bootCount        = 0;
+RTC_DATA_ATTR int      successCount     = 0;
+RTC_DATA_ATTR float    lastVolts        = 0.0f;
+RTC_DATA_ATTR uint8_t  rtcWifiChannel   = 0;        // ESP-NOW WiFi channel; 0 = not yet discovered
+RTC_DATA_ATTR uint32_t secondsSinceOta  = ESPNOW_OTA_INTERVAL_S; // force OTA check on first boot
 
 BoardConfig boardConfig;
 char macAddress[18];
@@ -242,7 +243,9 @@ void loop() {
         // Connect to WiFi when channel is unknown (first ever boot) or it is
         // time for an OTA check. Both cases read the current channel from the
         // AP association and cache it in RTC memory so subsequent boots skip WiFi.
-        bool needsWifi = (rtcWifiChannel == 0) || (bootCount % ESPNOW_OTA_BOOT_INTERVAL == 0);
+        secondsSinceOta += (uint32_t)boardConfig.timeToSleep;
+        bool otaDue    = (secondsSinceOta >= ESPNOW_OTA_INTERVAL_S);
+        bool needsWifi = (rtcWifiChannel == 0) || otaDue;
         if (needsWifi) {
             if (setupWifi()) {
                 uint8_t ch = (uint8_t)WiFi.channel();
@@ -250,8 +253,9 @@ void loop() {
                     rtcWifiChannel = ch;
                     Serial.printf("ESP-NOW: WiFi channel cached: %u\n", ch);
                 }
-                if (bootCount % ESPNOW_OTA_BOOT_INTERVAL == 0) {
+                if (otaDue) {
                     checkForUpdates();
+                    secondsSinceOta = 0;
                 }
             }
             WiFi.disconnect(true); // true = also disable WiFi radio
