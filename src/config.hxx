@@ -32,7 +32,6 @@ static const char* const MQTT_JSY_FREQ_TOPIC          = "/ac-freq/set";
 static const char* const MQTT_JSY_ENERGY_TOPIC        = "/ac-energy/set";
 static const char* const MQTT_JSY_DAILY_ENERGY_TOPIC  = "/ac-energy-daily/set";
 static const char* const MQTT_IR_AC_TOPIC             = "/ir-ac/set"; // subscribe: receive AC commands
-static const char* const MQTT_IR_TV_TOPIC             = "/ir-tv/set"; // subscribe: receive TV commands
 
 // OTA Update server details
 static const char* const OTA_HOST = "YOUR_SERVER_IP_OR_DOMAIN";
@@ -53,6 +52,8 @@ static constexpr int DHT_INITIAL_DELAY_MS = 2000;   // Guard delay before first 
 static constexpr int DHT_RETRY_DELAY_MS = 2000;     // Delay between DHT retries — DHT22 needs >=2 s between reads
 static constexpr int VOLT_READS = 10;                // Number of times to read the voltage for averaging
 static constexpr float RAW_VOLTS_CONVERSION = 620.5; // Mapping raw input back to voltage 4095 / 3.3 * voltage divider factor (2)
+static constexpr float BATT_RISING_DELTA_V = 0.05f;  // Skip battery publish if voltage rose by this much since last reading (charging detection)
+static constexpr uint16_t IR_AC_REPEAT = 3;           // Number of times to repeat the IR AC frame (improves reliability)
 static constexpr int WEB_SERVER_POLL_INTERVAL_MS = 100; // Interval in ms to poll the web server for OTA updates
 
 // Battery ADC
@@ -61,9 +62,10 @@ static constexpr int   ADC_SETTLE_DELAY_MS    = 10;      // Settle time between 
 static constexpr float VOLT_SMOOTH_NEW        = 0.7f;    // Exponential smoothing weight for new reading
 static constexpr float VOLT_SMOOTH_PREV       = 0.3f;    // Exponential smoothing weight for previous reading
 
-// SCD41
+// SCD41 / SHT40 (shared I2C bus defaults)
 static constexpr int   SCD41_DEFAULT_SDA_PIN  = 21;      // ESP32 default I2C SDA pin
 static constexpr int   SCD41_DEFAULT_SCL_PIN  = 22;      // ESP32 default I2C SCL pin
+static constexpr uint8_t SHT40_I2C_ADDR       = 0x44;   // SHT40 default I2C address
 static constexpr int   SCD41_INIT_DELAY_MS    = 500;     // Delay after stopPeriodicMeasurement (ms) — datasheet min 500
 static constexpr int   SCD41_REINIT_DELAY_MS  = 20;      // Delay after reinit() before next command (ms)
 
@@ -88,8 +90,8 @@ static constexpr float JSY_ENERGY_SCALE        = 1000.0f;// Raw Wh → kWh
 // Enter the 6 bytes below in order.
 static const uint8_t  ESPNOW_GATEWAY_MAC[6]    = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 static constexpr uint32_t ESPNOW_SEND_TIMEOUT_MS  = 2000; // Max ms to wait for delivery ACK
-static constexpr int   ESPNOW_OTA_BOOT_INTERVAL  = 6;    // Connect WiFi for OTA every N boots (~1h at 10-min sleep)
-static constexpr int   ESPNOW_RETRY_SLEEP_S      = 60;   // Short sleep after a failed DHT read or ESP-NOW send (s)
+static constexpr uint32_t ESPNOW_OTA_INTERVAL_S  = 3600; // Connect WiFi for OTA check every 1 hour (seconds)
+static constexpr int   ESPNOW_RETRY_SLEEP_S      = 60;   // Short sleep after a failed sensor read or ESP-NOW send (s)
 // WiFi channel is discovered automatically on first boot and cached in RTC memory.
 // No manual channel configuration is required.
 
@@ -106,6 +108,7 @@ enum SensorType : uint32_t {
     SENSOR_SCD41   = (1 << 2), // CO2 + temperature + humidity via I2C
     SENSOR_JSY194G = (1 << 3), // JSY-MK-194G AC power meter via Modbus RTU/UART
     SENSOR_IR_AC   = (1 << 4), // IR transmitter — sends commands to Samsung AC unit
+    SENSOR_SHT40   = (1 << 5), // SHT40 temperature + humidity via I2C
 };
 
 // Allow combining SensorType flags with | in board config initialisers

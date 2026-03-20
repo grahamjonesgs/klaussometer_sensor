@@ -1,5 +1,6 @@
-arduino-libraries/ArduinoMqttClient@^0.1.8
-adafruit/DHT sensor library@^1.4.6
 crankyoldgit/IRremoteESP8266@2.8.4
+sensirion/Sensirion I2C SHT4x@^1.1.0
 fu-hsi/PMS Library@^1.1.0
 sensirion/Sensirion I2C SCD4x@^1.1.0
+adafruit/DHT sensor library@^1.4.6
+arduino-libraries/ArduinoMqttClient@^0.1.8

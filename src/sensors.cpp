@@ -1,11 +1,13 @@
 #include "sensors.h"
 #include <PMS.h>
 #include <SensirionI2cScd4x.h>
+#include <SensirionI2cSht4x.h>
 #include <esp_task_wdt.h>
 
 // File-scope sensor objects (Serial2 / Wire initialised by setup() before first use)
 static PMS               pms(Serial2);
 static SensirionI2cScd4x scd4x;
+static SensirionI2cSht4x sht4x;
 
 SensorData readDhtSensor() {
     SensorData data;
@@ -75,6 +77,26 @@ void initScd41(int sdaPin, int sclPin) {
     scd4x.reinit();                  // restore factory settings; recovers sensor from bad state
     delay(SCD41_REINIT_DELAY_MS);
     scd4x.startPeriodicMeasurement();
+}
+
+// Initialise SHT40 via the Sensirion library; called from setup()
+void initSht40(int sdaPin, int sclPin) {
+    Wire.begin(sdaPin >= 0 ? sdaPin : SCD41_DEFAULT_SDA_PIN,
+               sclPin >= 0 ? sclPin : SCD41_DEFAULT_SCL_PIN);
+    sht4x.begin(Wire, SHT40_I2C_ADDR);
+}
+
+// Read temperature and humidity from SHT40
+SensorData readSht40() {
+    SensorData data = { NAN, NAN, false };
+    float temperature = 0.0f;
+    float humidity    = 0.0f;
+    if (sht4x.measureHighPrecision(temperature, humidity) != 0) return data;
+    if (isnan(temperature) || isnan(humidity)) return data;
+    data.temperature = temperature;
+    data.humidity    = humidity;
+    data.success     = true;
+    return data;
 }
 
 // Read PMS5003 particulate matter sensor via the PMS library (Serial2)

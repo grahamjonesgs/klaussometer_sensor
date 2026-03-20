@@ -153,6 +153,10 @@ void setup() {
         initScd41(boardConfig.i2cSdaPin, boardConfig.i2cSclPin);
     }
 
+    if (boardConfig.sensors & SENSOR_SHT40) {
+        initSht40(boardConfig.i2cSdaPin, boardConfig.i2cSclPin);
+    }
+
     if (boardConfig.sensors & SENSOR_JSY194G) {
         Serial1.begin(9600, SERIAL_8N1, boardConfig.jsyRxPin, boardConfig.jsyTxPin);
         if (boardConfig.jsyDePin >= 0) {
@@ -233,6 +237,18 @@ void loop() {
                 payload.successCount = (uint16_t)successCount;
             } else {
                 dhtOk = false;
+            }
+        }
+
+        if (boardConfig.sensors & SENSOR_SHT40) {
+            SensorData reading = readSht40();
+            if (reading.success) {
+                payload.temperature = reading.temperature;
+                payload.humidity    = reading.humidity;
+                successCount++;
+                payload.successCount = (uint16_t)successCount;
+            } else {
+                dhtOk = false; // reuse flag — causes short retry sleep on failure
             }
         }
 
@@ -386,6 +402,26 @@ void loop() {
         }
     }
 
+    // Read SHT40 sensor if present
+    if (boardConfig.sensors & SENSOR_SHT40) {
+        SensorData reading = readSht40();
+        if (!reading.success) {
+            snprintf(debugBuf, sizeof(debugBuf), "%s SHT40 read failed.", timeBuffer);
+            debugMessage(debugBuf, true);
+            if (boardConfig.isBatteryPowered) {
+                deepSleep(boardConfig.timeToSleep);
+            }
+        } else {
+            successCount++;
+            lastTemp  = reading.temperature;
+            lastHumid = reading.humidity;
+            strncpy(lastReadingTimeStr, timeBuffer, sizeof(lastReadingTimeStr) - 1);
+            lastReadingTimeStr[sizeof(lastReadingTimeStr) - 1] = '\0';
+            mqttSendFloat(temperatureTopic, reading.temperature);
+            mqttSendFloat(humidityTopic,    reading.humidity);
+        }
+    }
+
     // Read and publish battery voltage
     // Skip if voltage rose since last reading — indicates board is charging/plugged in.
     batteryMessage[0] = '\0';
@@ -399,8 +435,8 @@ void loop() {
         }
     }
 
-    // Send DHT summary debug message
-    if (boardConfig.sensors & SENSOR_DHT) {
+    // Send temperature/humidity summary debug message
+    if ((boardConfig.sensors & SENSOR_DHT) || (boardConfig.sensors & SENSOR_SHT40)) {
         char mqttMessage[256];
         snprintf(mqttMessage, sizeof(mqttMessage), "%s | T: %.1f | H: %.0f%s | Boot: %d | Success: %d",
                  timeBuffer, lastTemp, lastHumid, batteryMessage, bootCount, successCount);

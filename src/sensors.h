@@ -4,7 +4,9 @@
 #include "globals.h"
 
 void        initScd41(int sdaPin, int sclPin);
+void        initSht40(int sdaPin, int sclPin);
 SensorData  readDhtSensor();
+SensorData  readSht40();
 float       readBatteryVoltage();
 Pms5003Data readPms5003();
 Scd41Data   readScd41();
