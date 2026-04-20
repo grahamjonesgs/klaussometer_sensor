@@ -92,6 +92,13 @@ static const uint8_t  ESPNOW_GATEWAY_MAC[6]    = {0x00, 0x00, 0x00, 0x00, 0x00, 
 static constexpr uint32_t ESPNOW_SEND_TIMEOUT_MS  = 2000; // Max ms to wait for delivery ACK
 static constexpr uint32_t ESPNOW_OTA_INTERVAL_S  = 3600; // Connect WiFi for OTA check every 1 hour (seconds)
 static constexpr int   ESPNOW_RETRY_SLEEP_S      = 60;   // Short sleep after a failed sensor read or ESP-NOW send (s)
+// Gateway RX watchdog: if no ESP-NOW packet has been received within this many
+// seconds the gateway will re-initialise its ESP-NOW receiver. Guards against
+// stuck-state bugs after WiFi reconnects / mesh channel changes where the MAC
+// still ACKs sender packets (so the sender believes it is succeeding) but the
+// ESP-NOW RX callback no longer fires. Set to 0 to disable. Should comfortably
+// exceed the longest sensor timeToSleep to avoid false positives.
+static constexpr uint32_t ESPNOW_RX_WATCHDOG_S   = 1800;
 // WiFi channel is discovered automatically on first boot and cached in RTC memory.
 // No manual channel configuration is required.
 

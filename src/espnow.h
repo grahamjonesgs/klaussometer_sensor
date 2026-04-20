@@ -18,8 +18,11 @@ struct __attribute__((packed)) EspNowPayload {
 // Call initEspNowGateway() once after WiFi is connected.
 // Call handleEspNowReceived() regularly from loop() to forward received
 // packets to MQTT — safe to call even when no packet has arrived.
+// Call espNowGatewayTick() regularly from loop() to run the RX watchdog and
+// re-initialise the ESP-NOW receiver after WiFi reconnect events.
 void initEspNowGateway();
 void handleEspNowReceived();
+void espNowGatewayTick();
 
 // ── Battery node (sender) ─────────────────────────────────────────────────
 // Configures WiFi to the given channel, sends the payload to

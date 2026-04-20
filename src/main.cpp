@@ -304,7 +304,10 @@ void loop() {
         unsigned long nextReadingTime = lastReadingTime + (boardConfig.timeToSleep * 1000UL);
         while ((long)(millis() - nextReadingTime) < 0) {
             mqttClient.poll(); // process incoming subscribed messages (e.g. IR AC commands)
-            if (boardConfig.isEspNowGateway) handleEspNowReceived();
+            if (boardConfig.isEspNowGateway) {
+                handleEspNowReceived();
+                espNowGatewayTick();
+            }
             // Power on PMS5003 early so laser stabilizes before its scheduled read
             if ((boardConfig.sensors & SENSOR_PMS5003) && boardConfig.pmsPowerPin >= 0) {
                 unsigned long nextPmsRead = lastPmsReadMs + PMS5003_READ_INTERVAL_MS;
@@ -522,7 +525,10 @@ void loop() {
     }
 
     // Process any ESP-NOW packets that arrived during this cycle's sensor reads
-    if (boardConfig.isEspNowGateway) handleEspNowReceived();
+    if (boardConfig.isEspNowGateway) {
+        handleEspNowReceived();
+        espNowGatewayTick();
+    }
 
     if (boardConfig.isBatteryPowered) {
         delay(1000); // Allow messages to transmit before sleeping

@@ -13,11 +13,44 @@
 static volatile bool espNowDataReady = false;
 static EspNowPayload espNowRxBuf     = {};
 
+// Watchdog + re-init state. Both are touched from the main loop only, except
+// reinitRequested which is set from the WiFi event callback (different task).
+static uint32_t lastRxMs         = 0;
+static volatile bool reinitRequested = false;
+
 // Runs in the WiFi task context — keep it short; just copy and set flag.
 static void onDataReceived(const uint8_t* mac, const uint8_t* data, int len) {
     if ((size_t)len != sizeof(EspNowPayload)) return;
     memcpy((void*)&espNowRxBuf, data, sizeof(EspNowPayload));
     espNowDataReady = true;
+}
+
+// Tear down and bring the ESP-NOW receiver back up. Called after WiFi events
+// that may have desynced the ESP-NOW driver, or when the RX watchdog expires.
+// Runs on the main task so it is safe to call esp_now_deinit/init here.
+static void reinitEspNowReceiver() {
+    esp_now_deinit();
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("ESP-NOW: gateway re-init failed");
+        return;
+    }
+    esp_now_register_recv_cb(onDataReceived);
+    lastRxMs = millis();
+    Serial.printf("ESP-NOW: gateway receiver re-initialised (channel %u)\n",
+                  (unsigned)WiFi.channel());
+}
+
+// WiFi event callback — fires on the WiFi/system event task. Keep it short:
+// just flag that a re-init is needed; the main loop will act on it.
+static void onWifiEvent(WiFiEvent_t event) {
+    switch (event) {
+        case SYSTEM_EVENT_STA_CONNECTED:
+        case SYSTEM_EVENT_STA_GOT_IP:
+            reinitRequested = true;
+            break;
+        default:
+            break;
+    }
 }
 
 void initEspNowGateway() {
@@ -27,7 +60,28 @@ void initEspNowGateway() {
         return;
     }
     esp_now_register_recv_cb(onDataReceived);
+    WiFi.onEvent(onWifiEvent);
+    lastRxMs = millis();
     Serial.println("ESP-NOW: gateway ready");
+}
+
+// Call regularly from loop(). Handles deferred re-init requests from the WiFi
+// event task and the RX watchdog. Cheap when nothing needs doing.
+void espNowGatewayTick() {
+    if (reinitRequested) {
+        reinitRequested = false;
+        Serial.println("ESP-NOW: WiFi reconnect detected — re-initialising receiver");
+        reinitEspNowReceiver();
+        return;
+    }
+    if (ESPNOW_RX_WATCHDOG_S > 0 && lastRxMs != 0) {
+        uint32_t elapsed = millis() - lastRxMs; // unsigned wraparound safe
+        if (elapsed > ESPNOW_RX_WATCHDOG_S * 1000UL) {
+            Serial.printf("ESP-NOW: RX watchdog expired after %us — re-initialising\n",
+                          (unsigned)(elapsed / 1000UL));
+            reinitEspNowReceiver();
+        }
+    }
 }
 
 void handleEspNowReceived() {
@@ -36,6 +90,7 @@ void handleEspNowReceived() {
     EspNowPayload pkt;
     memcpy(&pkt, (const void*)&espNowRxBuf, sizeof(EspNowPayload));
     espNowDataReady = false;
+    lastRxMs = millis(); // stamp for the RX watchdog
     pkt.roomName[sizeof(pkt.roomName) - 1] = '\0'; // guard against missing terminator
 
     char topic[TOPIC_BUF_LEN];
@@ -68,11 +123,12 @@ void handleEspNowReceived() {
     }
 
     snprintf(debugBuf, sizeof(debugBuf),
-             "%s | V%s | ESP-NOW [%s] T:%.1f H:%.0f%% Bat:%.2fV Boot:%u Success:%u",
+             "%s | V%s | ESP-NOW [%s] T:%.1f H:%.0f%% Bat:%.2fV Boot:%u Success:%u GwCh:%u",
              tsBuf,
              FIRMWARE_VERSION,
              pkt.roomName, pkt.temperature, pkt.humidity,
-             pkt.batteryVolts, pkt.bootCount, pkt.successCount);
+             pkt.batteryVolts, pkt.bootCount, pkt.successCount,
+             (unsigned)WiFi.channel());
     Serial.println(debugBuf);
 
     char dbgTopic[TOPIC_BUF_LEN];
