@@ -24,10 +24,19 @@ SensorData readDhtSensor() {
         data.humidity    = dht->readHumidity();
         if (!isnan(data.temperature) && !isnan(data.humidity)) {
             data.success = true;
+            Serial.printf("DHT read OK (attempt %d/%d): T=%.1f H=%.1f\n",
+                          i + 1, DHT_RETRIES, data.temperature, data.humidity);
             break;
         }
+        Serial.printf("DHT read attempt %d/%d failed (T=%.1f H=%.1f)\n",
+                      i + 1, DHT_RETRIES, data.temperature, data.humidity);
         delay(DHT_RETRY_DELAY_MS); // DHT22 requires >=2 s between reads
         esp_task_wdt_reset();      // keep watchdog alive during extended retry wait
+    }
+
+    if (!data.success) {
+        Serial.printf("DHT sensor failed all %d retries — check wiring on pin %d\n",
+                      DHT_RETRIES, boardConfig.dhtDataPin);
     }
 
     if (boardConfig.isBatteryPowered) {

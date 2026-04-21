@@ -285,7 +285,36 @@ void loop() {
                 // WiFi channel (router reboot, DFS, etc.). Clear the cached channel
                 // so the next boot reconnects to WiFi and rediscovers it.
                 rtcWifiChannel = 0;
-                Serial.println("ESP-NOW: send failed — channel cache cleared, will rediscover next boot");
+                Serial.println("ESP-NOW: send failed — attempting WiFi/MQTT fallback");
+                // espNowSend() uses esp_wifi_set_channel() which corrupts the TCP stack;
+                // a full radio reset is needed before regular WiFi/MQTT will work reliably.
+                WiFi.mode(WIFI_OFF);
+                delay(500);
+                if (setupWifi()) {
+                    uint8_t ch = (uint8_t)WiFi.channel();
+                    if (ch > 0) {
+                        rtcWifiChannel = ch;
+                        Serial.printf("ESP-NOW: WiFi channel re-cached: %u\n", ch);
+                    }
+                    mqttClient.stop(); // close any stale socket before opening a fresh one
+                    mqttReconnect();
+                    if (mqttClient.connected()) {
+                        if (!isnan(payload.temperature))
+                            mqttSendFloat(temperatureTopic, payload.temperature);
+                        if (!isnan(payload.humidity))
+                            mqttSendFloat(humidityTopic, payload.humidity);
+                        if (payload.batteryVolts > 0.0f)
+                            mqttSendFloat(batteryTopic, payload.batteryVolts);
+                        snprintf(debugBuf, sizeof(debugBuf),
+                                 "ESP-NOW fallback via WiFi | T:%.1f H:%.0f%% Bat:%.2fV Boot:%u",
+                                 payload.temperature, payload.humidity, payload.batteryVolts, bootCount);
+                        debugMessage(debugBuf, true);
+                        espNowOk = true; // data delivered — sleep normal interval
+                    }
+                    mqttClient.flush(); // ensure all messages are transmitted before closing
+                    mqttClient.stop(); // close MQTT socket cleanly before radio goes down
+                    WiFi.disconnect(true);
+                }
             }
         } else {
             Serial.println("ESP-NOW: channel not yet known — skipping send this boot");
